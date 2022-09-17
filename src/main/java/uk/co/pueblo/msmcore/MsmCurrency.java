@@ -18,10 +18,10 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.util.IterableBuilder;
 
-class Currency extends Instrument {
+public class MsmCurrency extends MsmInstrument {
 
 	// Constants
-	static final Logger LOGGER = LogManager.getLogger(Currency.class);
+	static final Logger LOGGER = LogManager.getLogger(MsmCurrency.class);
 	private static final String PROPS_FILE = "MsmCurrency.properties";
 	private static final String CRNC_TABLE = "CRNC";
 	private static final String FX_TABLE = "CRNC_EXCHG";
@@ -31,7 +31,7 @@ class Currency extends Instrument {
 	private final Table fxTable;
 
 	// Constructor
-	Currency(Database msmDb) throws IOException {
+	public MsmCurrency(Database msmDb) throws IOException {
 		super(PROPS_FILE);
 
 		// Open the currency tables
@@ -47,7 +47,7 @@ class Currency extends Instrument {
 	 * @return 0 update OK; 1 update with warnings; 2 update with errors
 	 * @throws IOException
 	 */
-	int update(Map<String, String> sourceRow) throws IOException {
+	public int update(Map<String, String> sourceRow) throws IOException {
 
 		// Validate incoming row and process status
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
@@ -134,7 +134,7 @@ class Currency extends Instrument {
 	 * @return the ISO codes
 	 * @throws IOException
 	 */
-	List<String> getIsoCodes(int defHcrnc) throws IOException {
+	public List<String> getIsoCodes(int defHcrnc) throws IOException {
 		Map<String, Object> row = null;
 		Map<String, Object> rowPattern = new HashMap<>();
 		Iterator<Row> crncIt;

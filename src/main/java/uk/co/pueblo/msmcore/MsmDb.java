@@ -18,10 +18,10 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.crypt.CryptCodecProvider;
 
-public class Db {
+public class MsmDb {
 
 	// Constants
-	private static final Logger LOGGER = LogManager.getLogger(Db.class);
+	private static final Logger LOGGER = LogManager.getLogger(MsmDb.class);
 	private static final String DHD_TABLE = "DHD";
 	private static final String CLI_DAT_TABLE = "CLI_DAT";
 	private static final String CNTRY_TABLE = "CNTRY";
@@ -33,7 +33,7 @@ public class Db {
 	private final Table cntryTable;
 
 	// DHD table columns
-	enum DhdColumn {
+	public enum DhdColumn {
 		BASE_CURRENCY("hcrncDef");
 
 		private final String column;
@@ -48,7 +48,7 @@ public class Db {
 	}
 
 	// CLI_DAT table rows
-	enum CliDatRow {
+	public enum CliDatRow {
 		FILENAME(65541, 8, "rgbVal"), OLUPDATE(917505, 7, "dtVal");
 
 		private final int idData;
@@ -75,7 +75,7 @@ public class Db {
 	}
 
 	// Constructor
-	Db(String fileName, String password) throws IOException {
+	public MsmDb(String fileName, String password) throws IOException {
 
 		// Create lock file
 		final String lockFileName;
@@ -113,11 +113,11 @@ public class Db {
 		return;
 	}
 
-	Database getDb() {
+	public Database getDb() {
 		return db;
 	}
 
-	void closeDb() throws IOException {
+	public void closeDb() throws IOException {
 		LOGGER.info("Closing Money file: {}", db.getFile());
 		db.close();
 		return;
@@ -130,7 +130,7 @@ public class Db {
 	 * @return the hcrnc
 	 * @throws IOException
 	 */
-	int getDhdVal(String dhdCol) throws IOException {
+	public int getDhdVal(String dhdCol) throws IOException {
 		Row row = dhdTable.getNextRow();
 		return (int) row.get(dhdCol);
 	}
@@ -143,7 +143,7 @@ public class Db {
 	 * @return true if successful, otherwise false
 	 * @throws IOException
 	 */
-	boolean updateCliDatVal(CliDatRow name, Object newVal) throws IOException {
+	public boolean updateCliDatVal(CliDatRow name, Object newVal) throws IOException {
 		IndexCursor cursor = CursorBuilder.createCursor(cliDatTable.getPrimaryKeyIndex());
 		boolean found = cursor.findFirstRow(Collections.singletonMap("idData", name.getIdData()));
 		if (found) {

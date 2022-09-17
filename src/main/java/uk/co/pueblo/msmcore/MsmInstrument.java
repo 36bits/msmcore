@@ -12,10 +12,10 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-abstract class Instrument {
+abstract class MsmInstrument {
 
 	// Constants
-	static final Logger LOGGER = LogManager.getLogger(Instrument.class);
+	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
 	static final int UPDATE_OK = 0;
 	static final int UPDATE_WARN = 1;
@@ -26,7 +26,7 @@ abstract class Instrument {
 	Properties props = new Properties();
 
 	// Constructor
-	Instrument(String propsFile) {
+	MsmInstrument(String propsFile) {
 		// Open properties
 		if (!propsFile.isEmpty()) {
 			try {
@@ -118,7 +118,7 @@ abstract class Instrument {
 		return;
 	}
 
-	void logSummary() {
+	public void logSummary() {
 		summary.forEach((key, count) -> {
 			LOGGER.info("Summary for quote type {}: OK = {}, warnings = {}, errors = {}", key, count[0], count[1], count[2]);
 		});

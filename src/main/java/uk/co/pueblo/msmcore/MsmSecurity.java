@@ -22,10 +22,10 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.util.IterableBuilder;
 
-class Security extends Instrument {
+public class MsmSecurity extends MsmInstrument {
 
 	// Constants
-	static final Logger LOGGER = LogManager.getLogger(Security.class);
+	static final Logger LOGGER = LogManager.getLogger(MsmSecurity.class);
 	private static final String PROPS_FILE = "MsmSecurity.properties";
 	private static final String SEC_TABLE = "SEC";
 	private static final String SP_TABLE = "SP";
@@ -40,7 +40,7 @@ class Security extends Instrument {
 	private int hsp = 0;
 
 	// Constructor
-	Security(Database msmDb) throws IOException {
+	public MsmSecurity(Database msmDb) throws IOException {
 		super(PROPS_FILE);
 
 		// Open the securities tables
@@ -63,7 +63,7 @@ class Security extends Instrument {
 	 * @return 0 update OK; 1 update with warnings; 2 update with errors
 	 * @throws IOException
 	 */
-	int update(Map<String, String> sourceRow) throws IOException {
+	public int update(Map<String, String> sourceRow) throws IOException {
 
 		// Validate incoming row and process status
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
@@ -190,7 +190,7 @@ class Security extends Instrument {
 		return updateStatus;
 	}
 
-	void addNewSpRows() throws IOException {
+	public void addNewSpRows() throws IOException {
 		if (!newSpRows.isEmpty()) {
 			spTable.addRowsFromMaps(newSpRows);
 			LOGGER.info("Added {} new {} to SP table from SP table append list", newSpRows.size(), newSpRows.size() == 1 ? "quote" : "quotes");
@@ -205,7 +205,7 @@ class Security extends Instrument {
 	 * @return the list of symbols and corresponding countries
 	 * @throws IOException
 	 */
-	List<String[]> getSymbols(Db db) throws IOException {
+	public List<String[]> getSymbols(MsmDb db) throws IOException {
 		Map<String, Object> row = null;
 		Map<String, Object> rowPattern = new HashMap<>();
 		Iterator<Row> secIt;
