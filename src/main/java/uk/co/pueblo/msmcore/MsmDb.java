@@ -28,10 +28,10 @@ public class MsmDb {
 
 	// Instance variables
 	private final Database db;
-	private final Table dhdTable;
-	private final Table cliDatTable;
-	private final Table cntryTable;
-
+	private Table dhdTable = null;
+	private Table cliDatTable = null;
+	private Table cntryTable = null;
+	
 	// DHD table columns
 	public enum DhdColumn {
 		BASE_CURRENCY("hcrncDef");
@@ -104,12 +104,7 @@ public class MsmDb {
 		LOGGER.info("Opening Money file: {}", dbFile.getAbsolutePath());
 		db = new DatabaseBuilder(dbFile).setCodecProvider(cryptCp).open();
 		db.setDateTimeType(DateTimeType.LOCAL_DATE_TIME);
-
-		// Open the core tables
-		dhdTable = db.getTable(DHD_TABLE);
-		cliDatTable = db.getTable(CLI_DAT_TABLE);
-		cntryTable = db.getTable(CNTRY_TABLE);
-
+	
 		return;
 	}
 
@@ -131,6 +126,9 @@ public class MsmDb {
 	 * @throws IOException
 	 */
 	public int getDhdVal(String dhdCol) throws IOException {
+		if (dhdTable == null) {
+			dhdTable = db.getTable(DHD_TABLE);
+		}
 		Row row = dhdTable.getNextRow();
 		return (int) row.get(dhdCol);
 	}
@@ -144,6 +142,9 @@ public class MsmDb {
 	 * @throws IOException
 	 */
 	public boolean updateCliDatVal(CliDatRow name, Object newVal) throws IOException {
+		if (cliDatTable == null) {
+			cliDatTable = db.getTable(CLI_DAT_TABLE);
+		}
 		IndexCursor cursor = CursorBuilder.createCursor(cliDatTable.getPrimaryKeyIndex());
 		boolean found = cursor.findFirstRow(Collections.singletonMap("idData", name.getIdData()));
 		if (found) {
@@ -164,6 +165,9 @@ public class MsmDb {
 	 * @throws IOException
 	 */
 	String getCntryCode(int hcntry) throws IOException {
+		if (cntryTable == null) {
+			cntryTable = db.getTable(CNTRY_TABLE);
+		}
 		IndexCursor cursor = CursorBuilder.createCursor(cntryTable.getPrimaryKeyIndex());
 		boolean found = cursor.findFirstRow(Collections.singletonMap("hcntry", hcntry));
 		if (found) {
@@ -171,5 +175,4 @@ public class MsmDb {
 		}
 		return null;
 	}
-
 }
