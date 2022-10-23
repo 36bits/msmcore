@@ -3,7 +3,7 @@
 
 	<groupId>uk.co.pueblo</groupId>
 	<artifactId>msmcore</artifactId>
-	<version>1.0.0</version>
+	<version>1.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>msmcore</name>
@@ -11,7 +11,7 @@
 
 	<scm>
 		<developerConnection>scm:git:file:///home/dev/git/msmcore.git</developerConnection>
-		<tag>v1.0.0</tag>
+		<tag>HEAD</tag>
 	</scm>
 
 	<properties>
