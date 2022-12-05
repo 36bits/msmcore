@@ -120,7 +120,7 @@ abstract class MsmInstrument {
 
 	public void logSummary() {
 		summary.forEach((key, count) -> {
-			LOGGER.info("Summary for quote type {}: OK = {}, warnings = {}, errors = {}", key, count[0], count[1], count[2]);
+			LOGGER.info("Update summary for quote type {}: OK = {}, warnings = {}, errors = {}", key, count[0], count[1], count[2]);
 		});
 	}
 }
