@@ -53,7 +53,7 @@ public class MsmSecurity extends MsmInstrument {
 		if (spCursor.getPreviousRow() != null) {
 			hsp = (int) spCursor.getCurrentRowValue(spTable.getColumn("hsp"));
 		}
-		LOGGER.debug("Current highest hsp = {}", hsp);
+		LOGGER.debug("Current highest hsp={}", hsp);
 	}
 
 	/**
@@ -75,7 +75,7 @@ public class MsmSecurity extends MsmInstrument {
 		}
 
 		String symbol = msmRow.get("xSymbol").toString();
-		LOGGER.info("Updating quote data for symbol {}, quote type = {}", symbol, quoteType);
+		LOGGER.info("Updating quote data for symbol {}, quote type={}", symbol, quoteType);
 
 		// Truncate symbol if required
 		String origSymbol = symbol;
@@ -97,7 +97,7 @@ public class MsmSecurity extends MsmInstrument {
 		if (found) {
 			secRow = secCursor.getCurrentRow();
 			hsec = (int) secRow.get("hsec");
-			LOGGER.info("Found symbol {} in SEC table: sct = {}, hsec = {}", symbol, secRow.get("sct"), hsec);
+			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
 			// Merge quote row into SEC row and write to SEC table
 			secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
 			secCursor.updateCurrentRowFromMap(secRow);
@@ -131,8 +131,8 @@ public class MsmSecurity extends MsmInstrument {
 			Instant quoteInstant = ZonedDateTime.of(quoteDate, SYS_ZONE_ID).toInstant();
 			long firstDays = Math.abs(ChronoUnit.DAYS.between(firstInstant, quoteInstant));
 			long lastDays = Math.abs(ChronoUnit.DAYS.between(lastInstant, quoteInstant));
-			LOGGER.debug("Instants: first = {}, last = {}, quote = {}", firstInstant, lastInstant, quoteInstant);
-			LOGGER.debug("Days: first->quote = {}, last->quote = {}", firstDays, lastDays);
+			LOGGER.debug("Instants: first={}, last={}, quote={}", firstInstant, lastInstant, quoteInstant);
+			LOGGER.debug("Days: first->quote={}, last->quote={}", firstDays, lastDays);
 
 			if (lastDays < firstDays) {
 				spIt = new IterableBuilder(spCursor).setMatchPattern(spRowPattern).reverse().iterator();
@@ -152,7 +152,7 @@ public class MsmSecurity extends MsmInstrument {
 					// Found existing quote for this hsec and quote date so update SP table
 					spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 					spCursor.updateCurrentRowFromMap(spRow);
-					LOGGER.info("Updated previous quote for symbol {} in SP table: {}, new price = {}", symbol, spRow.get("dt"), spRow.get("dPrice"));
+					LOGGER.info("Updated previous quote for symbol {} in SP table: {}, new price={}", symbol, spRow.get("dt"), spRow.get("dPrice"));
 					return updateStatus;
 				}
 				if (rowInstant.isBefore(maxInstant)) {
@@ -175,7 +175,7 @@ public class MsmSecurity extends MsmInstrument {
 		if (prevSpRow.isEmpty()) {
 			LOGGER.info("Cannot find previous quote for symbol {} in SP table", symbol);
 		} else {
-			LOGGER.info("Found previous quote for symbol {} in SP table: {}, price = {}, hsp = {}", symbol, prevSpRow.get("dt"), prevSpRow.get("dPrice"), prevSpRow.get("hsp"));
+			LOGGER.info("Found previous quote for symbol {} in SP table: {}, price={}, hsp={}", symbol, prevSpRow.get("dt"), prevSpRow.get("dPrice"), prevSpRow.get("hsp"));
 		}
 
 		// Add to SP row add list
@@ -185,7 +185,7 @@ public class MsmSecurity extends MsmInstrument {
 		spRow.put("src", SRC_ONLINE);
 		spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 		newSpRows.add(spRow);
-		LOGGER.info("Added new quote for symbol {} to SP table append list: {}, new price = {}, new hsp = {}", symbol, spRow.get("dt"), spRow.get("dPrice"), spRow.get("hsp"));
+		LOGGER.info("Added new quote for symbol {} to SP table append list: {}, new price={}, new hsp={}", symbol, spRow.get("dt"), spRow.get("dPrice"), spRow.get("hsp"));
 
 		return updateStatus;
 	}

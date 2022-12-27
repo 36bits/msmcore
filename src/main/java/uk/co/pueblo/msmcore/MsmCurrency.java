@@ -84,14 +84,14 @@ public class MsmCurrency extends MsmInstrument {
 					newRate = 1 / newRate;
 					msmRow.put("rate", newRate);
 				}
-				LOGGER.info("Found exchange rate: from hcrnc = {}, to hcrnc = {}", hcrnc[i], hcrnc[(i + 1) % 2]);
+				LOGGER.info("Found exchange rate: from hcrnc={}, to hcrnc={}", hcrnc[i], hcrnc[(i + 1) % 2]);
 				if (oldRate != newRate) {
 					// Merge quote row into FX row and write to FX table
 					fxRow.putAll(msmRow);		// TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
-					LOGGER.info("Updated exchange rate: previous rate = {}, new rate = {}", oldRate, newRate);
+					LOGGER.info("Updated exchange rate: previous rate={}, new rate={}", oldRate, newRate);
 				} else {
-					LOGGER.info("Skipped exchange rate update, rate has not changed: previous rate = {}, new rate = {}", oldRate, newRate);
+					LOGGER.info("Skipped exchange rate update, rate has not changed: previous rate={}, new rate={}", oldRate, newRate);
 				}
 				break;
 			}
@@ -118,7 +118,7 @@ public class MsmCurrency extends MsmInstrument {
 		boolean found = cursor.findFirstRow(Collections.singletonMap("szIsoCode", isoCode));
 		if (found) {
 			hcrnc = (int) cursor.getCurrentRowValue(crncTable.getColumn("hcrnc"));
-			LOGGER.info("Found currency {}, hcrnc = {}", isoCode, hcrnc);
+			LOGGER.info("Found currency {}, hcrnc={}", isoCode, hcrnc);
 		} else {
 			LOGGER.warn("Cannot find currency {}", isoCode);
 		}
@@ -148,7 +148,7 @@ public class MsmCurrency extends MsmInstrument {
 			row = crncIt.next();
 			if ((int) row.get("hcrnc") == defHcrnc) {
 				defIsoCode = (String) row.get("szIsoCode");
-				LOGGER.info("Base currency is {}, hcrnc = {}", defIsoCode, defHcrnc);
+				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
 			} else {
 				isoCodes.add((String) row.get("szIsoCode"));
 			}
