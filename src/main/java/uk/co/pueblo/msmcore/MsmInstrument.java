@@ -22,7 +22,6 @@ abstract class MsmInstrument {
 	static final int UPDATE_ERROR = 2;
 
 	// Instance variables
-	Map<String, int[]> summary = new HashMap<>();
 	Properties props = new Properties();
 
 	// Constructor
@@ -108,19 +107,5 @@ abstract class MsmInstrument {
 
 		returnRow.put("xStatus", maxStatus);
 		return returnRow;
-	}
-
-	void incSummary(String key, int index) {
-		summary.putIfAbsent(key, new int[] { 0, 0, 0 }); // OK, warnings, errors
-		int[] count = summary.get(key);
-		count[index]++;
-		summary.put(key, count);
-		return;
-	}
-
-	public void logSummary() {
-		summary.forEach((key, count) -> {
-			LOGGER.info("Update summary for quote type {}: OK={}, warnings={}, errors={}", key, count[0], count[1], count[2]);
-		});
 	}
 }

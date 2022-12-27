@@ -70,7 +70,6 @@ public class MsmSecurity extends MsmInstrument {
 		int updateStatus = Integer.parseInt(msmRow.get("xStatus").toString());
 		String quoteType = msmRow.get("xType").toString();
 		if (updateStatus == UPDATE_ERROR) {
-			incSummary(quoteType, updateStatus);
 			return updateStatus;
 		}
 
@@ -103,13 +102,9 @@ public class MsmSecurity extends MsmInstrument {
 			secCursor.updateCurrentRowFromMap(secRow);
 			LOGGER.info("Updated SEC table for symbol {}", symbol);
 		} else {
-			LOGGER.warn("Cannot find symbol {} in SEC table", symbol);
-			incSummary(quoteType, UPDATE_WARN);
-			return UPDATE_WARN;
+			LOGGER.error("Cannot find symbol {} in SEC table", symbol);
+			return UPDATE_ERROR;
 		}
-
-		// Update summary
-		incSummary(quoteType, updateStatus);
 
 		// Update SP table with quote row
 		LocalDateTime quoteDate = (LocalDateTime) msmRow.get("dt");

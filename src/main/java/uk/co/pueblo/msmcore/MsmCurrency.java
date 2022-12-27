@@ -52,9 +52,7 @@ public class MsmCurrency extends MsmInstrument {
 		// Validate incoming row and process status
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
 		int updateStatus = (int) msmRow.get("xStatus");
-		String quoteType = msmRow.get("xType").toString();
 		if (updateStatus == UPDATE_ERROR) {
-			incSummary(quoteType, updateStatus);
 			return updateStatus;
 		}
 
@@ -89,9 +87,9 @@ public class MsmCurrency extends MsmInstrument {
 					// Merge quote row into FX row and write to FX table
 					fxRow.putAll(msmRow);		// TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
-					LOGGER.info("Updated exchange rate: previous rate={}, new rate={}", oldRate, newRate);
+					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
 				} else {
-					LOGGER.info("Skipped exchange rate update, rate has not changed: previous rate={}, new rate={}", oldRate, newRate);
+					LOGGER.info("Skipped exchange rate update, rate has not changed: new rate={}, previous rate={}", newRate, oldRate);
 				}
 				break;
 			}
@@ -101,7 +99,6 @@ public class MsmCurrency extends MsmInstrument {
 			updateStatus = UPDATE_ERROR;
 			LOGGER.error("Cannot find previous exchange rate");
 		}
-		incSummary(quoteType, updateStatus);
 		return updateStatus;
 	}
 
