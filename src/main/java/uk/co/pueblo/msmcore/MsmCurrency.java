@@ -85,11 +85,12 @@ public class MsmCurrency extends MsmInstrument {
 				LOGGER.info("Found exchange rate: from hcrnc={}, to hcrnc={}", hcrnc[i], hcrnc[(i + 1) % 2]);
 				if (oldRate != newRate) {
 					// Merge quote row into FX row and write to FX table
-					fxRow.putAll(msmRow);		// TODO Should fxRow be sanitised first?
+					fxRow.putAll(msmRow); // TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
 				} else {
-					LOGGER.info("Skipped exchange rate update, rate has not changed: new rate={}, previous rate={}", newRate, oldRate);
+					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
+					updateStatus = UPDATE_SKIP;
 				}
 				break;
 			}

@@ -1,9 +1,8 @@
 package uk.co.pueblo.msmcore;
 
 import java.io.IOException;
-import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,11 +24,10 @@ import com.healthmarketscience.jackcess.util.IterableBuilder;
 public class MsmSecurity extends MsmInstrument {
 
 	// Constants
-	static final Logger LOGGER = LogManager.getLogger(MsmSecurity.class);
+	private static final Logger LOGGER = LogManager.getLogger(MsmSecurity.class);
 	private static final String PROPS_FILE = "MsmSecurity.properties";
 	private static final String SEC_TABLE = "SEC";
 	private static final String SP_TABLE = "SP";
-	private static final int SRC_BUY = 1;
 	private static final int SRC_MANUAL = 5;
 	private static final int SRC_ONLINE = 6;
 
@@ -84,103 +82,121 @@ public class MsmSecurity extends MsmInstrument {
 			msmRow.put("xSymbol", symbol);
 		}
 
-		// Add dtSerial to quote row
-		// TODO Confirm assumption that dtSerial is time-stamp of quote update
-		msmRow.put("dtSerial", LocalDateTime.now());
-
-		// Update SEC table with quote row
+		// Find symbol in SEC table
 		int hsec = -1;
 		Map<String, Object> secRow = null;
 		IndexCursor secCursor = CursorBuilder.createCursor(secTable.getPrimaryKeyIndex());
-		boolean found = secCursor.findFirstRow(Collections.singletonMap("szSymbol", symbol));
-		if (found) {
+		if (secCursor.findFirstRow(Collections.singletonMap("szSymbol", symbol))) {
 			secRow = secCursor.getCurrentRow();
 			hsec = (int) secRow.get("hsec");
 			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
+		} else {
+			LOGGER.warn("Cannot find symbol {} in SEC table", symbol);
+			return UPDATE_ERROR;
+		}
+
+		// Update SEC table
+		LocalDateTime quoteTime;
+		if (msmRow.containsKey("dtLastUpdate")) {
+			quoteTime = (LocalDateTime) msmRow.get("dtLastUpdate");
+			// Skip update if quote timestamp is equal to SEC row timestamp
+			if (quoteTime.equals((LocalDateTime) secRow.get("dtLastUpdate"))) {
+				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
+				return UPDATE_SKIP;
+			}
 			// Merge quote row into SEC row and write to SEC table
 			secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
 			secCursor.updateCurrentRowFromMap(secRow);
 			LOGGER.info("Updated SEC table for symbol {}", symbol);
 		} else {
-			LOGGER.error("Cannot find symbol {} in SEC table", symbol);
-			return UPDATE_ERROR;
+			quoteTime = (LocalDateTime) msmRow.get("dt");
 		}
+
+		// Add SP table values to quote row
+		msmRow.put("dtSerial", LocalDateTime.now()); // TODO Confirm assumption that dtSerial is timestamp of record update
+		msmRow.put("src", (long) SRC_ONLINE);
 
 		// Update SP table with quote row
-		LocalDateTime quoteDate = (LocalDateTime) msmRow.get("dt");
-		Map<String, Object> spRowPattern = new HashMap<>();
-		Map<String, Object> spRow = new HashMap<>();
-		Map<String, Object> prevSpRow = new HashMap<>();
-		spRowPattern.put("hsec", hsec);
 		IndexCursor spCursor = CursorBuilder.createCursor(spTable.getPrimaryKeyIndex());
+		Map<String, Object> spRowPattern = new HashMap<>();
+		spRowPattern.put("hsec", hsec);
 		Iterator<Row> spIt = new IterableBuilder(spCursor).setMatchPattern(spRowPattern).forward().iterator();
+		Map<String, Object> spRow = new HashMap<>();
+		Map<String, Object> highestSpRow = new HashMap<>();
 		if (spIt.hasNext()) {
-			// Get instants for date from first and last rows for hsec
+			// Get dates from first and last rows for this hsec
 			spRow = spIt.next();
-			Instant firstInstant = ZonedDateTime.of((LocalDateTime) spRow.get("dt"), SYS_ZONE_ID).toInstant();
+			LocalDate firstDate = ((LocalDateTime) spRow.get("dt")).toLocalDate();
 			spIt = new IterableBuilder(spCursor).setMatchPattern(spRowPattern).reverse().iterator();
 			spRow = spIt.next();
-			Instant lastInstant = ZonedDateTime.of((LocalDateTime) spRow.get("dt"), SYS_ZONE_ID).toInstant();
+			LocalDate lastDate = ((LocalDateTime) spRow.get("dt")).toLocalDate();
 
-			// Build iterator with the closest date to the quote date
-			Instant quoteInstant = ZonedDateTime.of(quoteDate, SYS_ZONE_ID).toInstant();
-			long firstDays = Math.abs(ChronoUnit.DAYS.between(firstInstant, quoteInstant));
-			long lastDays = Math.abs(ChronoUnit.DAYS.between(lastInstant, quoteInstant));
-			LOGGER.debug("Instants: first={}, last={}, quote={}", firstInstant, lastInstant, quoteInstant);
-			LOGGER.debug("Days: first->quote={}, last->quote={}", firstDays, lastDays);
+			// Get difference in days between dates of first and last rows and quote date
+			LocalDate quoteDate = ((LocalDateTime) msmRow.get("dt")).toLocalDate();
+			// long firstDaysDiff = Math.abs(Duration.between(firstDate, quoteDate).toDays());
+			long firstDaysDiff = Math.abs(ChronoUnit.DAYS.between(firstDate, quoteDate));
+			long lastDaysDiff = Math.abs(ChronoUnit.DAYS.between(lastDate, quoteDate));
+			LOGGER.debug("Timestamps: first={}, last={}, quote={}", firstDate, lastDate, quoteDate);
+			LOGGER.debug("Days difference: first->quote={}, last->quote={}", firstDaysDiff, lastDaysDiff);
 
-			if (lastDays < firstDays) {
+			// Create forward iterator again if first row date is closest to quote date
+			if (firstDaysDiff < lastDaysDiff) {
 				spIt = new IterableBuilder(spCursor).setMatchPattern(spRowPattern).reverse().iterator();
-			} else {
-				spIt = new IterableBuilder(spCursor).setMatchPattern(spRowPattern).forward().iterator();
+				spRow = spIt.next();
 			}
 
-			// Search SP table for existing quote or most recent previous quote
-			Instant rowInstant = Instant.ofEpochMilli(0);
-			Instant maxInstant = Instant.ofEpochMilli(0);
-			while (spIt.hasNext()) {
-				spRow = spIt.next();
+			// Search SP table for same-day quote or most recent previous quote
+			LocalDate rowDate;
+			LocalDate highestDate = LocalDate.ofEpochDay(0);
+			while (true) {
+				LOGGER.debug("Highest seen date: {}", highestDate);
 				LOGGER.debug(spRow);
 				int src = (int) spRow.get("src");
-				rowInstant = ZonedDateTime.of((LocalDateTime) spRow.get("dt"), SYS_ZONE_ID).toInstant();
-				if ((src == SRC_ONLINE || src == SRC_MANUAL) && rowInstant.equals(quoteInstant)) {
-					// Found existing quote for this hsec and quote date so update SP table
-					spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
-					spCursor.updateCurrentRowFromMap(spRow);
-					LOGGER.info("Updated previous quote for symbol {} in SP table: {}, new price={}", symbol, spRow.get("dt"), spRow.get("dPrice"));
-					return updateStatus;
+				rowDate = ((LocalDateTime) spRow.get("dt")).toLocalDate();
+				// Update highest seen date and row
+				if (rowDate.isAfter(highestDate)) {
+					if (rowDate.isBefore(quoteDate)) { // update for any price source
+						highestDate = rowDate;
+						highestSpRow = spRow;
+					} else if (rowDate.equals(quoteDate) && src < SRC_MANUAL) { // update for transaction price source
+						highestDate = rowDate;
+						highestSpRow = spRow;
+					}
 				}
-				if (rowInstant.isBefore(maxInstant)) {
+				// Check for existing quote for this quote date
+				if (rowDate.equals(quoteDate)) {
+					if (src == SRC_ONLINE || src == SRC_MANUAL) {
+						// Merge quote row into SP row and write to SP table
+						spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
+						spCursor.updateCurrentRowFromMap(spRow);
+						LOGGER.info("Updated previous quote for symbol {} in SP table: new price={}, timestamp={}", symbol, spRow.get("dPrice"), quoteTime);
+						return updateStatus;
+					}
+					break;
+				}
+				// Loop
+				if (spIt.hasNext()) {
+					spRow = spIt.next();
 					continue;
-				}
-				// Test for previous manual or online quote
-				if ((src == SRC_ONLINE || src == SRC_MANUAL) && rowInstant.isBefore(quoteInstant)) {
-					maxInstant = rowInstant;
-					prevSpRow = spRow;
-					continue;
-				}
-				// Test for previous buy
-				if (src == SRC_BUY && (rowInstant.isBefore(quoteInstant) || rowInstant.equals(quoteInstant))) {
-					maxInstant = rowInstant;
-					prevSpRow = spRow;
+				} else {
+					break;
 				}
 			}
 		}
 
-		if (prevSpRow.isEmpty()) {
-			LOGGER.info("Cannot find previous quote for symbol {} in SP table", symbol);
+		if (highestSpRow.isEmpty()) {
+			LOGGER.info("Cannot find quote for symbol {} in SP table with timestamp earlier than new quote timestamp", symbol);
 		} else {
-			LOGGER.info("Found previous quote for symbol {} in SP table: {}, price={}, hsp={}", symbol, prevSpRow.get("dt"), prevSpRow.get("dPrice"), prevSpRow.get("hsp"));
+			LOGGER.info("Found previous quote for symbol {} in SP table: price={}, hsp={}, timestamp={}", symbol, highestSpRow.get("dPrice"), highestSpRow.get("hsp"), highestSpRow.get("dt"));
 		}
 
-		// Add to SP row add list
+		// Add quote row to SP row append list
 		hsp++;
 		spRow.put("hsp", hsp);
 		spRow.put("hsec", hsec);
-		spRow.put("src", SRC_ONLINE);
 		spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 		newSpRows.add(spRow);
-		LOGGER.info("Added new quote for symbol {} to SP table append list: {}, new price={}, new hsp={}", symbol, spRow.get("dt"), spRow.get("dPrice"), spRow.get("hsp"));
+		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), spRow.get("hsp"), quoteTime);
 
 		return updateStatus;
 	}

@@ -3,7 +3,9 @@ package uk.co.pueblo.msmcore;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -18,8 +20,9 @@ abstract class MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
 	static final int UPDATE_OK = 0;
-	static final int UPDATE_WARN = 1;
-	static final int UPDATE_ERROR = 2;
+	static final int UPDATE_SKIP = 1;
+	static final int UPDATE_WARN = 2;
+	static final int UPDATE_ERROR = 3;
 
 	// Instance variables
 	Properties props = new Properties();
@@ -71,20 +74,28 @@ abstract class MsmInstrument {
 						continue;
 					}
 				}
-				
+
 				// Now build MSM row
-				if (propArray[0].startsWith("dt") && value.matches("\\d+")) {
-					// Process LocalDateTime value in epoch seconds
-					returnRow.put(propArray[0], Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDate().atStartOfDay());
-				} else if (propArray[0].startsWith("dt")) {
-					// Process LocalDateTime value in UTC format
-					value = value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}$") ? value + "T00:00:00Z" : value;
-					returnRow.put(propArray[0], Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDate().atStartOfDay());
+				if (propArray[0].equals("dtLastUpdate") && value.matches("\\d+")) {
+					// LocalDateTime value from epoch seconds
+					returnRow.put(propArray[0], Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime());
+				} else if (propArray[0].equals("dtLastUpdate") && value.matches ("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
+					// LocalDateTime value from UTC string
+					returnRow.put(propArray[0], Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime());
+				} else if (propArray[0].equals("dt") && value.matches("\\d+")) {
+					// LocalDateTime value from epoch seconds and truncated to days 
+					returnRow.put(propArray[0], Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
+				} else if (propArray[0].equals("dt") && value.matches ("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
+					// LocalDateTime value from UTC string and truncated to days 
+					returnRow.put(propArray[0], Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
+				} else if (propArray[0].equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}$")) {
+					// LocalDateTime value from CSV date-only string
+					returnRow.put(propArray[0], LocalDateTime.parse(value + "T00:00:00"));
 				} else if (propArray[0].startsWith("d") || value.matches("\\d+\\.\\d+")) {
-					// Process Double values
+					// Double values
 					returnRow.put(propArray[0], Double.parseDouble(value));
 				} else if (propArray[0].startsWith("x")) {
-					// Process msmquote internal values
+					// msmquote internal values
 					returnRow.put(propArray[0], value);
 				} else {
 					// And finally assume everything else is a Long value
@@ -99,7 +110,7 @@ abstract class MsmInstrument {
 		for (pass = 0; pass < missingCols.length; pass++) {
 			if (!missingCols[pass].isEmpty()) {
 				LOGGER.log(logLevel[pass], "{} for symbol {}: {}", logMsg[pass], returnRow.get("xSymbol").toString(), missingCols[pass].substring(0, missingCols[pass].length() - 2));
-				if ((status = 4 - logLevel[pass].intLevel() / 100) > maxStatus) {
+				if ((status = UPDATE_ERROR + 2 - logLevel[pass].intLevel() / 100) > maxStatus) {
 					maxStatus = status;
 				}
 			}
