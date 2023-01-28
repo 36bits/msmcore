@@ -58,7 +58,7 @@ public class MsmSecurity extends MsmInstrument {
 	 * Update the SEC and SP tables with the supplied quote row.
 	 * 
 	 * @param sourceRow the row containing the quote data to update
-	 * @return 0 update OK; 1 update with warnings; 2 update with errors
+	 * @return 0 OK; 1 update skipped; 2 warning; 3 error
 	 * @throws IOException
 	 */
 	public int update(Map<String, String> sourceRow) throws IOException {
