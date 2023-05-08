@@ -55,20 +55,20 @@ public class MsmSecurity extends MsmInstrument {
 	}
 
 	/**
-	 * Update the SEC and SP tables with the supplied quote row.
+	 * Updates the SEC and SP tables with the supplied quote row.
 	 * 
 	 * @param sourceRow the row containing the quote data to update
-	 * @return 0 OK; 1 update skipped; 2 warning; 3 error
 	 * @throws IOException
 	 */
-	public int update(Map<String, String> sourceRow) throws IOException {
+	public void update(Map<String, String> sourceRow) throws IOException {
 
-		// Validate incoming row and process status
+		// Validate incoming row
+		quoteStatus = UPDATE_OK;
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
-		int updateStatus = Integer.parseInt(msmRow.get("xStatus").toString());
 		String quoteType = msmRow.get("xType").toString();
-		if (updateStatus == UPDATE_ERROR) {
-			return updateStatus;
+		if (quoteStatus == UPDATE_ERROR) {
+			incSummary(quoteType, quoteStatus);
+			return;
 		}
 
 		String symbol = msmRow.get("xSymbol").toString();
@@ -92,7 +92,9 @@ public class MsmSecurity extends MsmInstrument {
 			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
 		} else {
 			LOGGER.warn("Cannot find symbol {} in SEC table", symbol);
-			return UPDATE_ERROR;
+			quoteStatus = UPDATE_ERROR;
+			incSummary(quoteType, quoteStatus);			
+			return;
 		}
 
 		// Update SEC table
@@ -102,7 +104,9 @@ public class MsmSecurity extends MsmInstrument {
 			// Skip update if quote timestamp is equal to SEC row timestamp
 			if (quoteTime.equals((LocalDateTime) secRow.get("dtLastUpdate"))) {
 				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
-				return UPDATE_SKIP;
+				quoteStatus = UPDATE_SKIP;
+				incSummary(quoteType, quoteStatus);
+				return;
 			}
 			// Merge quote row into SEC row and write to SEC table
 			secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
@@ -170,7 +174,8 @@ public class MsmSecurity extends MsmInstrument {
 						spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 						spCursor.updateCurrentRowFromMap(spRow);
 						LOGGER.info("Updated previous quote for symbol {} in SP table: new price={}, timestamp={}", symbol, spRow.get("dPrice"), quoteTime);
-						return updateStatus;
+						incSummary(quoteType, quoteStatus);
+						return;
 					}
 					break;
 				}
@@ -198,7 +203,8 @@ public class MsmSecurity extends MsmInstrument {
 		newSpRows.add(spRow);
 		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), spRow.get("hsp"), quoteTime);
 
-		return updateStatus;
+		incSummary(quoteType, quoteStatus);
+		return;
 	}
 
 	public void addNewSpRows() throws IOException {

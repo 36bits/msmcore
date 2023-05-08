@@ -44,16 +44,17 @@ public class MsmCurrency extends MsmInstrument {
 	 * Updates the exchange rate for a currency pair.
 	 * 
 	 * @param sourceRow a row containing the currency quote data to update
-	 * @return 0 OK; 1 update skipped; 2 warning; 3 error
 	 * @throws IOException
 	 */
-	public int update(Map<String, String> sourceRow) throws IOException {
+	public void update(Map<String, String> sourceRow) throws IOException {
 
-		// Validate incoming row and process status
+		// Validate incoming row
+		quoteStatus = UPDATE_OK;
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
-		int updateStatus = (int) msmRow.get("xStatus");
-		if (updateStatus == UPDATE_ERROR) {
-			return updateStatus;
+		String quoteType = msmRow.get("xType").toString();
+		if (quoteStatus == UPDATE_ERROR) {
+			incSummary(quoteType, quoteStatus);
+			return;
 		}
 
 		String symbol = msmRow.get("xSymbol").toString();
@@ -90,17 +91,19 @@ public class MsmCurrency extends MsmInstrument {
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
 				} else {
 					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
-					updateStatus = UPDATE_SKIP;
+					quoteStatus = UPDATE_SKIP;
 				}
 				break;
 			}
 		}
 
 		if (i == 2) {
-			updateStatus = UPDATE_ERROR;
 			LOGGER.error("Cannot find previous exchange rate");
+			quoteStatus = UPDATE_ERROR;
 		}
-		return updateStatus;
+		
+		incSummary(quoteType, quoteStatus);
+		return;
 	}
 
 	/**
