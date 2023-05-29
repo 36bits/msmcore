@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,22 +23,19 @@ public class MsmCurrency extends MsmInstrument {
 
 	// Constants
 	static final Logger LOGGER = LogManager.getLogger(MsmCurrency.class);
-	private static final String PROPS_FILE = "MsmCurrency.properties";
 	private static final String CRNC_TABLE = "CRNC";
 	private static final String FX_TABLE = "CRNC_EXCHG";
+	private static final Properties props = openProperties("MsmCurrency.properties");
 
 	// Instance variables
 	private final Table crncTable;
-	private final Table fxTable;
-
+	private final Table fxTable;	
+	
 	// Constructor
 	public MsmCurrency(Database msmDb) throws IOException {
-		super(PROPS_FILE);
-
 		// Open the currency tables
 		crncTable = msmDb.getTable(CRNC_TABLE);
 		fxTable = msmDb.getTable(FX_TABLE);
-		return;
 	}
 
 	/**
@@ -49,11 +47,11 @@ public class MsmCurrency extends MsmInstrument {
 	public void update(Map<String, String> sourceRow) throws IOException {
 
 		// Validate incoming row
-		quoteStatus = UPDATE_OK;
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
+		workingStatus = UPDATE_OK;
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, props));
 		String quoteType = msmRow.get("xType").toString();
-		if (quoteStatus == UPDATE_ERROR) {
-			incSummary(quoteType, quoteStatus);
+		if (workingStatus == UPDATE_ERROR) {
+			incSummary(quoteType);
 			return;
 		}
 
@@ -91,7 +89,7 @@ public class MsmCurrency extends MsmInstrument {
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
 				} else {
 					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
-					quoteStatus = UPDATE_SKIP;
+					workingStatus = UPDATE_SKIP;
 				}
 				break;
 			}
@@ -99,10 +97,10 @@ public class MsmCurrency extends MsmInstrument {
 
 		if (i == 2) {
 			LOGGER.error("Cannot find previous exchange rate");
-			quoteStatus = UPDATE_ERROR;
+			workingStatus = UPDATE_ERROR;
 		}
 		
-		incSummary(quoteType, quoteStatus);
+		incSummary(quoteType);
 		return;
 	}
 

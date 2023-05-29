@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,11 +26,11 @@ public class MsmSecurity extends MsmInstrument {
 
 	// Constants
 	private static final Logger LOGGER = LogManager.getLogger(MsmSecurity.class);
-	private static final String PROPS_FILE = "MsmSecurity.properties";
 	private static final String SEC_TABLE = "SEC";
 	private static final String SP_TABLE = "SP";
 	private static final int SRC_MANUAL = 5;
 	private static final int SRC_ONLINE = 6;
+	private static final Properties props = openProperties("MsmSecurity.properties");
 
 	// Instance variables
 	private final Table secTable;
@@ -39,7 +40,6 @@ public class MsmSecurity extends MsmInstrument {
 
 	// Constructor
 	public MsmSecurity(Database msmDb) throws IOException {
-		super(PROPS_FILE);
 
 		// Open the securities tables
 		secTable = msmDb.getTable(SEC_TABLE);
@@ -63,11 +63,11 @@ public class MsmSecurity extends MsmInstrument {
 	public void update(Map<String, String> sourceRow) throws IOException {
 
 		// Validate incoming row
-		quoteStatus = UPDATE_OK;
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow));
+		workingStatus = UPDATE_OK;
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, props));
 		String quoteType = msmRow.get("xType").toString();
-		if (quoteStatus == UPDATE_ERROR) {
-			incSummary(quoteType, quoteStatus);
+		if (workingStatus == UPDATE_ERROR) {
+			incSummary(quoteType);
 			return;
 		}
 
@@ -92,8 +92,8 @@ public class MsmSecurity extends MsmInstrument {
 			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
 		} else {
 			LOGGER.warn("Cannot find symbol {} in SEC table", symbol);
-			quoteStatus = UPDATE_ERROR;
-			incSummary(quoteType, quoteStatus);			
+			workingStatus = UPDATE_ERROR;
+			incSummary(quoteType);			
 			return;
 		}
 
@@ -104,8 +104,8 @@ public class MsmSecurity extends MsmInstrument {
 			// Skip update if quote timestamp is equal to SEC row timestamp
 			if (quoteTime.equals((LocalDateTime) secRow.get("dtLastUpdate"))) {
 				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
-				quoteStatus = UPDATE_SKIP;
-				incSummary(quoteType, quoteStatus);
+				workingStatus = UPDATE_SKIP;
+				incSummary(quoteType);
 				return;
 			}
 			// Merge quote row into SEC row and write to SEC table
@@ -174,7 +174,7 @@ public class MsmSecurity extends MsmInstrument {
 						spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 						spCursor.updateCurrentRowFromMap(spRow);
 						LOGGER.info("Updated previous quote for symbol {} in SP table: new price={}, timestamp={}", symbol, spRow.get("dPrice"), quoteTime);
-						incSummary(quoteType, quoteStatus);
+						incSummary(quoteType);
 						return;
 					}
 					break;
@@ -203,7 +203,7 @@ public class MsmSecurity extends MsmInstrument {
 		newSpRows.add(spRow);
 		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), spRow.get("hsp"), quoteTime);
 
-		incSummary(quoteType, quoteStatus);
+		incSummary(quoteType);
 		return;
 	}
 

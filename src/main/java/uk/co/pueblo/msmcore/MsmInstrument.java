@@ -29,25 +29,11 @@ public abstract class MsmInstrument {
 	static int finalStatus = UPDATE_OK;
 
 	// Instance variables
-	Properties props = new Properties();
-	int quoteStatus;
-
-	// Constructor
-	MsmInstrument(String propsFile) {
-		// Open properties
-		if (!propsFile.isEmpty()) {
-			try {
-				InputStream propsIs = getClass().getClassLoader().getResourceAsStream(propsFile);
-				props.load(propsIs);
-			} catch (IOException e) {
-				LOGGER.fatal(e);
-			}
-		}
-	}
+	int workingStatus;
 
 	abstract void update(Map<String, String> inRow) throws IOException;
 
-	Map<String, Object> buildMsmRow(Map<String, String> inRow) {
+	Map<String, Object> buildMsmRow(Map<String, String> inRow, Properties props) {
 		Map<String, Object> msmRow = new HashMap<>();
 		String prop;
 
@@ -56,7 +42,7 @@ public abstract class MsmInstrument {
 		String missingCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
 		String columnSet = "column.";
 		int column = 1;
-
+		
 		for (pass = 0; pass < missingCols.length; pass += 2) {
 			if (pass == 2) {
 				columnSet = columnSet + msmRow.get("xType") + ".";
@@ -115,8 +101,8 @@ public abstract class MsmInstrument {
 		for (pass = 0; pass < missingCols.length; pass++) {
 			if (!missingCols[pass].isEmpty()) {
 				LOGGER.log(logLevel[pass], "{} for symbol {}: {}", logMsg[pass], msmRow.get("xSymbol").toString(), missingCols[pass].substring(0, missingCols[pass].length() - 2));
-				if ((tmpStatus = UPDATE_ERROR + 2 - logLevel[pass].intLevel() / 100) > quoteStatus) {
-					quoteStatus = tmpStatus;
+				if ((tmpStatus = UPDATE_ERROR + 2 - logLevel[pass].intLevel() / 100) > workingStatus) {
+					workingStatus = tmpStatus;
 				}
 			}
 		}
@@ -124,24 +110,36 @@ public abstract class MsmInstrument {
 		return msmRow;
 	}
 
-	static void incSummary(String quoteType, int status) {
+	void incSummary(String quoteType) {
 		// Increment summary counters
 		summary.putIfAbsent(quoteType, new int[4]); // OK, warning, error, skipped
 		int[] count = summary.get(quoteType);
-		count[status]++;
+		count[workingStatus]++;
 		summary.put(quoteType, count);
-		if (status > finalStatus && status < UPDATE_SKIP) {
-			finalStatus = status;
+		if (workingStatus > finalStatus && workingStatus < UPDATE_SKIP) {
+			finalStatus = workingStatus;
 		}
 		return;
 	}
-	
+
 	public static int logSummary() {
-	// Output summary to log
-	summary.forEach((key, count) -> {
-		int processed = count[0] + count[1] + count[2] + count[3];
-		LOGGER.info("Summary for quote type {}: processed={} [OK={}, warnings={}, errors={}, skipped={}]", key, processed, count[0], count[1], count[2], count[3]);
-	});	
-	return finalStatus;
+		// Output summary to log
+		summary.forEach((key, count) -> {
+			int processed = count[0] + count[1] + count[2] + count[3];
+			LOGGER.info("Summary for quote type {}: processed={} [OK={}, warnings={}, errors={}, skipped={}]", key, processed, count[0], count[1], count[2], count[3]);
+		});
+		return finalStatus;
+	}
+
+	static Properties openProperties(String propsFile) {
+		// Open properties
+		Properties props = new Properties();
+		try {
+			InputStream propsIs = MsmInstrument.class.getClassLoader().getResourceAsStream(propsFile);
+			props.load(propsIs);
+		} catch (IOException e) {
+			LOGGER.fatal(e);
+		}
+		return props;
 	}
 }
