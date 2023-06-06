@@ -112,7 +112,7 @@ public abstract class MsmInstrument {
 
 	void incSummary(String quoteType) {
 		// Increment summary counters
-		summary.putIfAbsent(quoteType, new int[4]); // OK, warning, error, skipped
+		summary.putIfAbsent(quoteType, new int[UPDATE_SKIP + 1]); // OK, warning, error, skipped
 		int[] count = summary.get(quoteType);
 		count[workingStatus]++;
 		summary.put(quoteType, count);
