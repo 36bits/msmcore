@@ -1,11 +1,9 @@
 package uk.co.pueblo.msmcore;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -19,6 +17,8 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.util.IterableBuilder;
 
+import uk.co.pueblo.msmcore.MsmDb.DhdColumn;
+
 public class MsmCurrency extends MsmInstrument {
 
 	// Constants
@@ -29,13 +29,39 @@ public class MsmCurrency extends MsmInstrument {
 
 	// Instance variables
 	private final Table crncTable;
-	private final Table fxTable;	
-	
+	private final Table fxTable;
+
 	// Constructor
-	public MsmCurrency(Database msmDb) throws IOException {
+	public MsmCurrency(MsmDb msmDb) throws IOException {
+
+		Database db = msmDb.getDb();
+		int defHcrnc = msmDb.getDhdVal(DhdColumn.BASE_CURRENCY.getName());
+
 		// Open the currency tables
-		crncTable = msmDb.getTable(CRNC_TABLE);
-		fxTable = msmDb.getTable(FX_TABLE);
+		crncTable = db.getTable(CRNC_TABLE);
+		fxTable = db.getTable(FX_TABLE);
+
+		// Build list of currency pairs
+		Map<String, Object> row = null;
+		Map<String, Object> rowPattern = new HashMap<>();
+		Iterator<Row> crncIt;
+		String defIsoCode = null;
+		rowPattern.put("fOnline", true); // online update flag set
+		rowPattern.put("fHidden", false);
+		IndexCursor cursor = CursorBuilder.createCursor(crncTable.getPrimaryKeyIndex());
+		crncIt = new IterableBuilder(cursor).setMatchPattern(rowPattern).forward().iterator();
+		while (crncIt.hasNext()) {
+			row = crncIt.next();
+			if ((int) row.get("hcrnc") == defHcrnc) {
+				defIsoCode = (String) row.get("szIsoCode");
+				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
+			} else {
+				msmSymbols.add((String) row.get("szIsoCode"));
+			}
+		}
+		for (int n = 0; n < msmSymbols.size(); n++) {
+			msmSymbols.set(n, defIsoCode + msmSymbols.get(n));
+		}
 	}
 
 	/**
@@ -99,7 +125,7 @@ public class MsmCurrency extends MsmInstrument {
 			LOGGER.error("Cannot find previous exchange rate");
 			workingStatus = UPDATE_ERROR;
 		}
-		
+
 		incSummary(quoteType);
 		return;
 	}
@@ -122,38 +148,5 @@ public class MsmCurrency extends MsmInstrument {
 			LOGGER.warn("Cannot find currency {}", isoCode);
 		}
 		return hcrnc;
-	}
-
-	/**
-	 * Gets the ISO codes of all currencies that have the online update flag set.
-	 * 
-	 * The base currency is returned as the last code in the list.
-	 * 
-	 * @param defHcrnc the hcrnc of the default currency
-	 * @return the ISO codes
-	 * @throws IOException
-	 */
-	public List<String> getIsoCodes(int defHcrnc) throws IOException {
-		Map<String, Object> row = null;
-		Map<String, Object> rowPattern = new HashMap<>();
-		Iterator<Row> crncIt;
-		String defIsoCode = null;
-		List<String> isoCodes = new ArrayList<>();
-		rowPattern.put("fOnline", true);
-		rowPattern.put("fHidden", false);
-		IndexCursor cursor = CursorBuilder.createCursor(crncTable.getPrimaryKeyIndex());
-		crncIt = new IterableBuilder(cursor).setMatchPattern(rowPattern).forward().iterator();
-		while (crncIt.hasNext()) {
-			row = crncIt.next();
-			if ((int) row.get("hcrnc") == defHcrnc) {
-				defIsoCode = (String) row.get("szIsoCode");
-				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
-			} else {
-				isoCodes.add((String) row.get("szIsoCode"));
-			}
-		}
-		// Add the base currency as the last ISO code in the list
-		isoCodes.add(defIsoCode);
-		return isoCodes;
 	}
 }

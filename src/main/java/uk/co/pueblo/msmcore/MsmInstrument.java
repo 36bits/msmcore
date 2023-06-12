@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -30,6 +32,7 @@ public abstract class MsmInstrument {
 
 	// Instance variables
 	int workingStatus;
+	protected final List<String> msmSymbols = new ArrayList<>();
 
 	abstract void update(Map<String, String> inRow) throws IOException;
 
@@ -42,7 +45,7 @@ public abstract class MsmInstrument {
 		String missingCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
 		String columnSet = "column.";
 		int column = 1;
-		
+
 		for (pass = 0; pass < missingCols.length; pass += 2) {
 			if (pass == 2) {
 				columnSet = columnSet + msmRow.get("xType") + ".";
@@ -94,6 +97,14 @@ public abstract class MsmInstrument {
 			}
 		}
 
+		// Reject if symbol is not in symbols list
+		String symbol = msmRow.get("xSymbol").toString();
+		if (!msmSymbols.contains(symbol)) {
+			LOGGER.error("Cannot find symbol {} in symbols list", symbol);
+			workingStatus = UPDATE_ERROR;
+			return msmRow;
+		}
+
 		// Emit log messages and set working status
 		String logMsg[] = { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" };
 		Level logLevel[] = { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN };
@@ -142,4 +153,9 @@ public abstract class MsmInstrument {
 		}
 		return props;
 	}
+
+	public List<String> getSymbols() {
+		return msmSymbols;
+	}
+
 }

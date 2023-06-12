@@ -35,15 +35,18 @@ public class MsmSecurity extends MsmInstrument {
 	// Instance variables
 	private final Table secTable;
 	private final Table spTable;
+	private final List<String> cntryCodes = new ArrayList<>();
 	private ArrayList<Map<String, Object>> newSpRows = new ArrayList<>();
 	private int hsp = 0;
 
 	// Constructor
-	public MsmSecurity(Database msmDb) throws IOException {
+	public MsmSecurity(MsmDb msmDb) throws IOException {
+
+		Database db = msmDb.getDb();
 
 		// Open the securities tables
-		secTable = msmDb.getTable(SEC_TABLE);
-		spTable = msmDb.getTable(SP_TABLE);
+		secTable = db.getTable(SEC_TABLE);
+		spTable = db.getTable(SP_TABLE);
 
 		// Get current hsp (SP table index)
 		IndexCursor spCursor = CursorBuilder.createCursor(spTable.getPrimaryKeyIndex());
@@ -52,6 +55,22 @@ public class MsmSecurity extends MsmInstrument {
 			hsp = (int) spCursor.getCurrentRowValue(spTable.getColumn("hsp"));
 		}
 		LOGGER.debug("Current highest hsp={}", hsp);
+
+		// Build lists of security symbols and corresponding country codes
+		Map<String, Object> row = null;
+		Map<String, Object> rowPattern = new HashMap<>();
+		Iterator<Row> secIt;
+		rowPattern.put("fOLQuotes", true);
+		IndexCursor secCursor = CursorBuilder.createCursor(secTable.getPrimaryKeyIndex());
+		secIt = new IterableBuilder(secCursor).setMatchPattern(rowPattern).forward().iterator();
+		String secSymbol;
+		while (secIt.hasNext()) {
+			row = secIt.next();
+			if ((secSymbol = (String) row.get("szSymbol")) != null) {
+				msmSymbols.add(secSymbol);
+				cntryCodes.add(msmDb.getCntryCode((int) row.get("hcntry")));
+			}
+		}
 	}
 
 	/**
@@ -93,7 +112,7 @@ public class MsmSecurity extends MsmInstrument {
 		} else {
 			LOGGER.warn("Cannot find symbol {} in SEC table", symbol);
 			workingStatus = UPDATE_ERROR;
-			incSummary(quoteType);			
+			incSummary(quoteType);
 			return;
 		}
 
@@ -215,32 +234,7 @@ public class MsmSecurity extends MsmInstrument {
 		return;
 	}
 
-	/**
-	 * Create a list of investment symbols and corresponding country codes.
-	 * 
-	 * @param db the MS Money database
-	 * @return the list of symbols and corresponding countries
-	 * @throws IOException
-	 */
-	public List<String[]> getSymbols(MsmDb db) throws IOException {
-		Map<String, Object> row = null;
-		Map<String, Object> rowPattern = new HashMap<>();
-		Iterator<Row> secIt;
-		List<String[]> symbols = new ArrayList<String[]>();
-		String[] symbol;
-
-		// Build list of symbols + countries
-		rowPattern.put("fOLQuotes", true);
-		IndexCursor secCursor = CursorBuilder.createCursor(secTable.getPrimaryKeyIndex());
-		secIt = new IterableBuilder(secCursor).setMatchPattern(rowPattern).forward().iterator();
-		while (secIt.hasNext()) {
-			symbol = new String[2];
-			row = secIt.next();
-			if ((symbol[0] = (String) row.get("szSymbol")) != null) {
-				symbol[1] = db.getCntryCode((int) row.get("hcntry"));
-				symbols.add(symbol);
-			}
-		}
-		return symbols;
+	public List<String> getCntryCodes() {
+		return cntryCodes;
 	}
 }
