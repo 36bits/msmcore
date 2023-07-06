@@ -83,8 +83,15 @@ public class MsmSecurity extends MsmInstrument {
 
 		// Validate incoming row
 		workingStatus = UPDATE_OK;
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, props));
-		String quoteType = msmRow.get("xType").toString();
+		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, props));
+		String quoteType = validatedRow.get("xType").toString();
+		if (workingStatus == UPDATE_ERROR) {
+			incSummary(quoteType);
+			return;
+		}
+		
+		// Now build MSM row
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, props));
 		if (workingStatus == UPDATE_ERROR) {
 			incSummary(quoteType);
 			return;
@@ -92,14 +99,6 @@ public class MsmSecurity extends MsmInstrument {
 
 		String symbol = msmRow.get("xSymbol").toString();
 		LOGGER.info("Updating quote data for symbol {}, quote type={}", symbol, quoteType);
-
-		// Truncate symbol if required
-		String origSymbol = symbol;
-		if (origSymbol.length() > 12) {
-			symbol = origSymbol.substring(0, 12);
-			LOGGER.info("Truncated symbol {} to {}", origSymbol, symbol);
-			msmRow.put("xSymbol", symbol);
-		}
 
 		// Find symbol in SEC table
 		int hsec = -1;

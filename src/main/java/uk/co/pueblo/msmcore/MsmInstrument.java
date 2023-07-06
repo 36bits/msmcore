@@ -36,89 +36,127 @@ public abstract class MsmInstrument {
 
 	abstract void update(Map<String, String> inRow) throws IOException;
 
+	Map<String, String> validateQuoteRow(Map<String, String> inRow, Properties props) {
+		Map<String, String> outRow = new HashMap<>();
+		String prop;
+		String missingCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
+		String columnSet = "column.";
+		int pass;
+		int index = 1;
+
+		for (pass = 0; pass < missingCols.length; pass += 2) {
+			if (pass == 2) {
+				columnSet = columnSet + inRow.get("xType") + ".";
+				index = 1;
+			}
+			while ((prop = props.getProperty(columnSet + index++)) != null) {
+				String propArray[] = prop.split(",");
+				String column = propArray[0];
+				if (inRow.containsKey(column)) {
+					outRow.put(column, inRow.get(column));
+				} else {
+					missingCols[pass] = missingCols[pass] + column + ", ";
+					// Add default value to row
+					if (propArray.length == 2) {
+						outRow.put(column, propArray[1]);
+						missingCols[pass + 1] = missingCols[pass + 1] + column + ", ";
+					}
+				}
+			}
+		}
+
+		String symbol = outRow.get("xSymbol");
+		if (msmSymbols.contains(symbol)) {
+			emitLogMsgs(outRow.get("xSymbol"), new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new Level[] { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN });
+		} else {
+			// Reject if symbol is not in symbols list
+			LOGGER.error("Cannot find symbol {} in symbols list", symbol);
+			workingStatus = UPDATE_ERROR;
+		}
+
+		return outRow;
+	}
+
 	Map<String, Object> buildMsmRow(Map<String, String> inRow, Properties props) {
 		Map<String, Object> msmRow = new HashMap<>();
 		String prop;
 
-		// Validate columns
-		int pass;
-		String missingCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
+		String invalidCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
 		String columnSet = "column.";
-		int column = 1;
+		int index = 1;
 
-		for (pass = 0; pass < missingCols.length; pass += 2) {
+		for (int pass = 0; pass < invalidCols.length; pass += 2) {
 			if (pass == 2) {
 				columnSet = columnSet + msmRow.get("xType") + ".";
-				column = 1;
+				index = 1;
 			}
-			while ((prop = props.getProperty(columnSet + column++)) != null) {
+			while ((prop = props.getProperty(columnSet + index++)) != null) {
 				String propArray[] = prop.split(",");
+				String propCol = propArray[0];
 				String value;
 
-				if (inRow.containsKey(propArray[0])) {
-					value = inRow.get(propArray[0]);
-				} else {
-					// Get default value
-					missingCols[pass] = missingCols[pass] + propArray[0] + ", ";
-					if (propArray.length == 2) {
-						value = propArray[1];
-						missingCols[pass + 1] = missingCols[pass + 1] + propArray[0] + ", ";
-					} else {
-						continue;
+				if (inRow.containsKey(propCol)) {
+					value = inRow.get(propCol);
+					// Add key and value to MSM row
+					while (true) {
+						if (propCol.equals("dtLastUpdate") && value.matches("\\d+")) {
+							// LocalDateTime value from epoch seconds
+							msmRow.put(propCol, Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime());
+						} else if (propCol.equals("dtLastUpdate") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
+							// LocalDateTime value from UTC string
+							msmRow.put(propCol, Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime());
+						} else if (propCol.equals("dt") && value.matches("\\d+")) {
+							// LocalDateTime value from epoch seconds and truncated to days
+							msmRow.put(propCol, Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
+						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
+							// LocalDateTime value from UTC string and truncated to days
+							msmRow.put(propCol, Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
+						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}$")) {
+							// LocalDateTime value from CSV date-only string
+							msmRow.put(propCol, LocalDateTime.parse(value + "T00:00:00"));
+						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+\\.?\\d+")) {
+							// Double values
+							msmRow.put(propCol, Double.parseDouble(value));
+						} else if (propCol.equals("xSymbol") && value.length() > 12) {
+							// symbol to truncate
+							String newValue = value.substring(0, 12);
+							LOGGER.info("Truncated symbol {} to {}", value, newValue);
+							msmRow.put(propCol, newValue);
+						} else if (propCol.startsWith("x")) {
+							// msmquote internal values
+							msmRow.put(propCol, value);
+						} else if (value.matches("-?\\d+")) {
+							// Long values
+							msmRow.put(propCol, Long.parseLong(value));
+						} else {
+							// Try again with the default value if there is one
+							invalidCols[pass] = invalidCols[pass] + propCol + ", ";
+							if (propArray.length == 2) {
+								value = propArray[1];
+								invalidCols[pass + 1] = invalidCols[pass + 1] + propCol + ", ";
+								continue;
+							}
+						}
+						break;
 					}
-				}
-
-				// Now build MSM row
-				if (propArray[0].equals("dtLastUpdate") && value.matches("\\d+")) {
-					// LocalDateTime value from epoch seconds
-					msmRow.put(propArray[0], Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime());
-				} else if (propArray[0].equals("dtLastUpdate") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
-					// LocalDateTime value from UTC string
-					msmRow.put(propArray[0], Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime());
-				} else if (propArray[0].equals("dt") && value.matches("\\d+")) {
-					// LocalDateTime value from epoch seconds and truncated to days
-					msmRow.put(propArray[0], Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
-				} else if (propArray[0].equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
-					// LocalDateTime value from UTC string and truncated to days
-					msmRow.put(propArray[0], Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
-				} else if (propArray[0].equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}$")) {
-					// LocalDateTime value from CSV date-only string
-					msmRow.put(propArray[0], LocalDateTime.parse(value + "T00:00:00"));
-				} else if (propArray[0].startsWith("d") || value.matches("\\d+\\.\\d+")) {
-					// Double values
-					msmRow.put(propArray[0], Double.parseDouble(value));
-				} else if (propArray[0].startsWith("x")) {
-					// msmquote internal values
-					msmRow.put(propArray[0], value);
-				} else {
-					// And finally assume everything else is a Long value
-					msmRow.put(propArray[0], Long.parseLong(value));
 				}
 			}
 		}
 
-		// Reject if symbol is not in symbols list
-		String symbol = msmRow.get("xSymbol").toString();
-		if (!msmSymbols.contains(symbol)) {
-			LOGGER.error("Cannot find symbol {} in symbols list", symbol);
-			workingStatus = UPDATE_ERROR;
-			return msmRow;
-		}
+		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid required quote data", "Required default values applied", "Invalid optional quote data", "Optional default values applied" }, invalidCols, new Level[] { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN });
+		return msmRow;
+	}
 
-		// Emit log messages and set working status
-		String logMsg[] = { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" };
-		Level logLevel[] = { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN };
+	private void emitLogMsgs(String symbol, String msgPrefix[], String msgData[], Level logLevel[]) {
 		int tmpStatus;
-		for (pass = 0; pass < missingCols.length; pass++) {
-			if (!missingCols[pass].isEmpty()) {
-				LOGGER.log(logLevel[pass], "{} for symbol {}: {}", logMsg[pass], msmRow.get("xSymbol").toString(), missingCols[pass].substring(0, missingCols[pass].length() - 2));
-				if ((tmpStatus = UPDATE_ERROR + 2 - logLevel[pass].intLevel() / 100) > workingStatus) {
+		for (int i = 0; i < msgPrefix.length; i++) {
+			if (!msgData[i].isEmpty()) {
+				LOGGER.log(logLevel[i], "{} for symbol {}: {}", msgPrefix[i], symbol, msgData[i].substring(0, msgData[i].length() - 2));
+				if ((tmpStatus = UPDATE_ERROR + 2 - logLevel[i].intLevel() / 100) > workingStatus) {
 					workingStatus = tmpStatus;
 				}
 			}
 		}
-
-		return msmRow;
 	}
 
 	void incSummary(String quoteType) {
@@ -157,5 +195,4 @@ public abstract class MsmInstrument {
 	public List<String> getSymbols() {
 		return msmSymbols;
 	}
-
 }
