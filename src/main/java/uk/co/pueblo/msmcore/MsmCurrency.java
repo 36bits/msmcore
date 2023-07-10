@@ -74,8 +74,15 @@ public class MsmCurrency extends MsmInstrument {
 
 		// Validate incoming row
 		workingStatus = UPDATE_OK;
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, props));
-		String quoteType = msmRow.get("xType").toString();
+		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, props));
+		String quoteType = validatedRow.get("xType").toString();
+		if (workingStatus == UPDATE_ERROR) {
+			incSummary(quoteType);
+			return;
+		}
+
+		// Now build MSM row
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, props));
 		if (workingStatus == UPDATE_ERROR) {
 			incSummary(quoteType);
 			return;

@@ -18,6 +18,13 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.crypt.CryptCodecProvider;
 
+/**
+ * A Microsoft Money database instance.
+ * 
+ * @author Jonathan Casiot
+ * @see <a href="https://jackcess.sourceforge.io/apidocs/">Jackcess</a>
+ * @see <a href="https://jackcessencrypt.sourceforge.io/apidocs/">Jackcess Encrypt</a>
+ */
 public class MsmDb {
 
 	// Constants
@@ -31,7 +38,7 @@ public class MsmDb {
 	private Table dhdTable = null;
 	private Table cliDatTable = null;
 	private Table cntryTable = null;
-	
+
 	// DHD table columns
 	public enum DhdColumn {
 		BASE_CURRENCY("hcrncDef");
@@ -74,7 +81,11 @@ public class MsmDb {
 		}
 	}
 
-	// Constructor
+	/**
+	 * @param fileName the name of the Money file
+	 * @param password the password for the Money file
+	 * @throws IOException
+	 */
 	public MsmDb(String fileName, String password) throws IOException {
 
 		// Create lock file
@@ -96,22 +107,30 @@ public class MsmDb {
 		final File dbFile = new File(fileName);
 		final CryptCodecProvider cryptCp;
 
-		if (password.length() > 0) {
-			cryptCp = new CryptCodecProvider(password);
-		} else {
+		if (password.isEmpty()) {
 			cryptCp = new CryptCodecProvider();
+		} else {
+			cryptCp = new CryptCodecProvider(password);
 		}
 		LOGGER.info("Opening Money file: {}", dbFile.getAbsolutePath());
 		db = new DatabaseBuilder(dbFile).setCodecProvider(cryptCp).open();
 		db.setDateTimeType(DateTimeType.LOCAL_DATE_TIME);
-	
+
 		return;
 	}
 
+	/**
+	 * Gets the Jackcess database instance.
+	 * 
+	 * @return the Jackcess database instance 
+	 */
 	public Database getDb() {
 		return db;
 	}
 
+	/**
+	 * Closes the Jackcess database instance.
+	 */
 	public void closeDb() throws IOException {
 		LOGGER.info("Closing Money file: {}", db.getFile());
 		db.close();
@@ -119,10 +138,10 @@ public class MsmDb {
 	}
 
 	/**
-	 * Get the value of the given column in the DHD table.
+	 * Gets the value of a column in the DHD table.
 	 * 
 	 * @param dhdCol the name of the column
-	 * @return the hcrnc
+	 * @return the column value
 	 * @throws IOException
 	 */
 	public int getDhdVal(String dhdCol) throws IOException {
@@ -134,7 +153,7 @@ public class MsmDb {
 	}
 
 	/**
-	 * Update a value in the CLI_DAT table.
+	 * Updates a value in the CLI_DAT table.
 	 * 
 	 * @param name   the name of the row to be updated
 	 * @param newVal the new value
@@ -158,13 +177,13 @@ public class MsmDb {
 	}
 
 	/**
-	 * Get the country code for the given hcntry.
+	 * Gets the two-character country code for a hcntry from the CNTRY table.
 	 * 
 	 * @param hcntry the hcntry to find the country code for
-	 * @return the country code or null if not found
+	 * @return the country code, or null if not found
 	 * @throws IOException
 	 */
-	String getCntryCode(int hcntry) throws IOException {
+	public String getCntryCode(int hcntry) throws IOException {
 		if (cntryTable == null) {
 			cntryTable = db.getTable(CNTRY_TABLE);
 		}
