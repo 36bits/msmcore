@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.StringJoiner;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -39,7 +40,7 @@ public abstract class MsmInstrument {
 	Map<String, String> validateQuoteRow(Map<String, String> inRow, Properties props) {
 		Map<String, String> outRow = new HashMap<>();
 		String prop;
-		String missingCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
+		StringJoiner missingCols[] = { new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", ") }; // required, required defaults, optional, optional defaults
 		String columnSet = "column.";
 		int pass;
 		int index = 1;
@@ -55,11 +56,11 @@ public abstract class MsmInstrument {
 				if (inRow.containsKey(column)) {
 					outRow.put(column, inRow.get(column));
 				} else {
-					missingCols[pass] = missingCols[pass] + column + ", ";
+					missingCols[pass].add(column);
 					// Add default value to row
 					if (propArray.length == 2) {
 						outRow.put(column, propArray[1]);
-						missingCols[pass + 1] = missingCols[pass + 1] + column + ", ";
+						missingCols[pass + 1].add(column);
 					}
 				}
 			}
@@ -80,8 +81,7 @@ public abstract class MsmInstrument {
 	Map<String, Object> buildMsmRow(Map<String, String> inRow, Properties props) {
 		Map<String, Object> msmRow = new HashMap<>();
 		String prop;
-
-		String invalidCols[] = { "", "", "", "" }; // required, required defaults, optional, optional defaults
+		StringJoiner invalidCols[] = { new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", ") }; // required, required defaults, optional, optional defaults
 		String columnSet = "column.";
 		int index = 1;
 
@@ -130,10 +130,10 @@ public abstract class MsmInstrument {
 							msmRow.put(propCol, Long.parseLong(value));
 						} else {
 							// Try again with the default value if there is one
-							invalidCols[pass] = invalidCols[pass] + propCol + ", ";
+							invalidCols[pass].add(propCol);
 							if (propArray.length == 2) {
 								value = propArray[1];
-								invalidCols[pass + 1] = invalidCols[pass + 1] + propCol + ", ";
+								invalidCols[pass + 1].add(propCol);
 								continue;
 							}
 						}
@@ -147,11 +147,12 @@ public abstract class MsmInstrument {
 		return msmRow;
 	}
 
-	private void emitLogMsgs(String symbol, String msgPrefix[], String msgData[], Level logLevel[]) {
+	private void emitLogMsgs(String symbol, String msgPrefix[], StringJoiner msgCols[], Level logLevel[]) {
 		int tmpStatus;
 		for (int i = 0; i < msgPrefix.length; i++) {
-			if (!msgData[i].isEmpty()) {
-				LOGGER.log(logLevel[i], "{} for symbol {}: {}", msgPrefix[i], symbol, msgData[i].substring(0, msgData[i].length() - 2));
+			String columns = msgCols[i].toString();
+			if (!columns.isEmpty()) {
+				LOGGER.log(logLevel[i], "{} for symbol {}: {}", msgPrefix[i], symbol, columns);
 				if ((tmpStatus = UPDATE_ERROR + 2 - logLevel[i].intLevel() / 100) > workingStatus) {
 					workingStatus = tmpStatus;
 				}
