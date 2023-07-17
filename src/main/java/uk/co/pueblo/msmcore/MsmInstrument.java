@@ -47,7 +47,7 @@ public abstract class MsmInstrument {
 
 		for (pass = 0; pass < missingCols.length; pass += 2) {
 			if (pass == 2) {
-				columnSet = columnSet + inRow.get("xType") + ".";
+				columnSet = columnSet + inRow.get("xType") + '.';
 				index = 1;
 			}
 			while ((prop = props.getProperty(columnSet + index++)) != null) {
@@ -87,7 +87,7 @@ public abstract class MsmInstrument {
 
 		for (int pass = 0; pass < invalidCols.length; pass += 2) {
 			if (pass == 2) {
-				columnSet = columnSet + msmRow.get("xType") + ".";
+				columnSet = columnSet + msmRow.get("xType") + '.';
 				index = 1;
 			}
 			while ((prop = props.getProperty(columnSet + index++)) != null) {
