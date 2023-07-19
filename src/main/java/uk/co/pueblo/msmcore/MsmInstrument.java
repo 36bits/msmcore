@@ -131,7 +131,7 @@ public abstract class MsmInstrument {
 							msmRow.put(propCol, Long.parseLong(value));
 						} else {
 							// Try again with the default value if there is one
-							invalidCols[pass].add(propCol);
+							invalidCols[pass].add(propCol + "=" + value);
 							if (propArray.length == 2) {
 								value = propArray[1];
 								invalidCols[pass + 1].add(propCol);
