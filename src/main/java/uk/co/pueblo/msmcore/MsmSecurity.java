@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -35,7 +34,6 @@ public class MsmSecurity extends MsmInstrument {
 	// Instance variables
 	private final Table secTable;
 	private final Table spTable;
-	private final List<String> cntryCodes = new ArrayList<>();
 	private ArrayList<Map<String, Object>> newSpRows = new ArrayList<>();
 	private int hsp = 0;
 
@@ -67,8 +65,8 @@ public class MsmSecurity extends MsmInstrument {
 		while (secIt.hasNext()) {
 			row = secIt.next();
 			if ((secSymbol = (String) row.get("szSymbol")) != null) {
-				msmSymbols.add(secSymbol);
-				cntryCodes.add(msmDb.getCntryCode((int) row.get("hcntry")));
+				msmSymbolsCheck.add(secSymbol);
+				msmSymbols.add(new String[] { secSymbol, msmDb.getCntryCode((int) row.get("hcntry")) });
 			}
 		}
 	}
@@ -89,7 +87,7 @@ public class MsmSecurity extends MsmInstrument {
 			incSummary(quoteType);
 			return;
 		}
-		
+
 		// Now build MSM row
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, props));
 		if (workingStatus == UPDATE_ERROR) {
@@ -231,9 +229,5 @@ public class MsmSecurity extends MsmInstrument {
 			LOGGER.info("Added {} new {} to SP table from SP table append list", newSpRows.size(), newSpRows.size() == 1 ? "quote" : "quotes");
 		}
 		return;
-	}
-
-	public List<String> getCntryCodes() {
-		return cntryCodes;
 	}
 }

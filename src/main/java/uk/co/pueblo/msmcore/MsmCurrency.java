@@ -56,11 +56,13 @@ public class MsmCurrency extends MsmInstrument {
 				defIsoCode = (String) row.get("szIsoCode");
 				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
 			} else {
-				msmSymbols.add((String) row.get("szIsoCode"));
+				msmSymbolsCheck.add(row.get("szIsoCode").toString());
 			}
 		}
-		for (int n = 0; n < msmSymbols.size(); n++) {
-			msmSymbols.set(n, defIsoCode + msmSymbols.get(n));
+		for (int i = 0; i < msmSymbolsCheck.size(); i++) {
+			String symbol = defIsoCode + msmSymbolsCheck.get(i);
+			msmSymbolsCheck.set(i, symbol);
+			msmSymbols.add(new String[] { symbol });
 		}
 	}
 

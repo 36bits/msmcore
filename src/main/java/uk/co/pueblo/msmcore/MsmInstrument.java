@@ -33,7 +33,8 @@ public abstract class MsmInstrument {
 
 	// Instance variables
 	int workingStatus;
-	protected final List<String> msmSymbols = new ArrayList<>();
+	protected final List<String[]> msmSymbols = new ArrayList<>();
+	protected final List<String> msmSymbolsCheck = new ArrayList<>();
 
 	abstract void update(Map<String, String> inRow) throws IOException;
 
@@ -67,7 +68,7 @@ public abstract class MsmInstrument {
 		}
 
 		String symbol = outRow.get("xSymbol");
-		if (msmSymbols.contains(symbol)) {
+		if (msmSymbolsCheck.contains(symbol)) {
 			emitLogMsgs(outRow.get("xSymbol"), new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new Level[] { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN });
 		} else {
 			// Reject if symbol is not in symbols list
@@ -193,7 +194,7 @@ public abstract class MsmInstrument {
 		return props;
 	}
 
-	public List<String> getSymbols() {
+	public List<String[]> getSymbols() {
 		return msmSymbols;
 	}
 }
