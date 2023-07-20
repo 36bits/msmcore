@@ -7,7 +7,7 @@
 	<name>msmcore</name>
 	<url>https://github.com/36bits/msmcore</url>
 	<scm>
-		<developerConnection>scm:git:file:///home/dev/git/msmcore.git</developerConnection>
+		<developerConnection>scm:git:file:///home/dev/projects/msmcore/msmcore.git</developerConnection>
 		<tag>HEAD</tag>
 	</scm>
 	<properties>
