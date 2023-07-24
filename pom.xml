@@ -1,4 +1,6 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>uk.co.pueblo</groupId>
 	<artifactId>msmcore</artifactId>
@@ -128,4 +130,27 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>pueblo</id>
+			<distributionManagement>
+				<repository>
+					<id>pueblo</id>
+					<url>file:///home/dev/maven/repository</url>
+				</repository>
+			</distributionManagement>
+		</profile>
+		<profile>
+			<id>github</id>
+			<distributionManagement>
+				<repository>
+					<id>github</id>
+					<name>GitHub 36bits Apache Maven Packages</name>
+					<url>https://maven.pkg.github.com/36bits/msmcore</url>
+				</repository>
+			</distributionManagement>
+		</profile>
+	</profiles>
+
 </project>
