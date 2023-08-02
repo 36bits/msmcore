@@ -25,7 +25,7 @@ public class MsmCurrency extends MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmCurrency.class);
 	private static final String CRNC_TABLE = "CRNC";
 	private static final String FX_TABLE = "CRNC_EXCHG";
-	private static final Properties props = openProperties("MsmCurrency.properties");
+	private static final Properties PROPS = openProperties("MsmCurrency.properties");
 
 	// Instance variables
 	private final Table crncTable;
@@ -75,17 +75,17 @@ public class MsmCurrency extends MsmInstrument {
 	public void update(Map<String, String> sourceRow) throws IOException {
 
 		// Validate incoming row
-		workingStatus = UPDATE_OK;
-		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, props));
+		workingStatus = UpdateStatus.OK;
+		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS));
 		String quoteType = validatedRow.get("xType").toString();
-		if (workingStatus == UPDATE_ERROR) {
+		if (workingStatus == UpdateStatus.ERROR) {
 			incSummary(quoteType);
 			return;
 		}
 
 		// Now build MSM row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, props));
-		if (workingStatus == UPDATE_ERROR) {
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));
+		if (workingStatus == UpdateStatus.ERROR) {
 			incSummary(quoteType);
 			return;
 		}
@@ -123,16 +123,16 @@ public class MsmCurrency extends MsmInstrument {
 					fxCursor.updateCurrentRowFromMap(fxRow);
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
 				} else {
-					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
-					workingStatus = UPDATE_SKIP;
+					workingStatus = UpdateStatus.SKIP;
+					LOGGER.log(workingStatus.level, "Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
 				}
 				break;
 			}
 		}
 
 		if (i == 2) {
-			LOGGER.error("Cannot find previous exchange rate");
-			workingStatus = UPDATE_ERROR;
+			workingStatus = UpdateStatus.ERROR;
+			LOGGER.log(workingStatus.level, "Cannot find previous exchange rate");
 		}
 
 		incSummary(quoteType);

@@ -29,7 +29,7 @@ public class MsmSecurity extends MsmInstrument {
 	private static final String SP_TABLE = "SP";
 	private static final int SRC_MANUAL = 5;
 	private static final int SRC_ONLINE = 6;
-	private static final Properties props = openProperties("MsmSecurity.properties");
+	private static final Properties PROPS = openProperties("MsmSecurity.properties");
 
 	// Instance variables
 	private final Table secTable;
@@ -80,17 +80,17 @@ public class MsmSecurity extends MsmInstrument {
 	public void update(Map<String, String> sourceRow) throws IOException {
 
 		// Validate incoming row
-		workingStatus = UPDATE_OK;
-		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, props));
+		workingStatus = UpdateStatus.OK;
+		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS));
 		String quoteType = validatedRow.get("xType").toString();
-		if (workingStatus == UPDATE_ERROR) {
+		if (workingStatus == UpdateStatus.ERROR) {
 			incSummary(quoteType);
 			return;
 		}
 
 		// Now build MSM row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, props));
-		if (workingStatus == UPDATE_ERROR) {
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));
+		if (workingStatus == UpdateStatus.ERROR) {
 			incSummary(quoteType);
 			return;
 		}
@@ -107,8 +107,8 @@ public class MsmSecurity extends MsmInstrument {
 			hsec = (int) secRow.get("hsec");
 			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
 		} else {
-			LOGGER.warn("Cannot find symbol {} in SEC table", symbol);
-			workingStatus = UPDATE_ERROR;
+			workingStatus = UpdateStatus.ERROR;
+			LOGGER.log(workingStatus.level, "Cannot find symbol {} in SEC table", symbol);
 			incSummary(quoteType);
 			return;
 		}
@@ -117,17 +117,22 @@ public class MsmSecurity extends MsmInstrument {
 		LocalDateTime quoteTime;
 		if (msmRow.containsKey("dtLastUpdate")) {
 			quoteTime = (LocalDateTime) msmRow.get("dtLastUpdate");
-			// Skip update if quote timestamp is equal to SEC row timestamp
-			if (quoteTime.equals((LocalDateTime) secRow.get("dtLastUpdate"))) {
+			if (!quoteTime.equals((LocalDateTime) secRow.get("dtLastUpdate"))) {
+				// Merge quote row into SEC row and write to SEC table
+				secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
+				secCursor.updateCurrentRowFromMap(secRow);
+				LOGGER.info("Updated SEC table for symbol {}", symbol);
+			} else if (ChronoUnit.DAYS.between(quoteTime, LocalDateTime.now()) > Long.parseLong(PROPS.getProperty("quote.staledays"))) {
+				// Quote data is stale
+				workingStatus = UpdateStatus.STALE;
+				incSummary(quoteType);
+			} else {
+				// Skip update
 				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
-				workingStatus = UPDATE_SKIP;
+				workingStatus = UpdateStatus.SKIP;
 				incSummary(quoteType);
 				return;
 			}
-			// Merge quote row into SEC row and write to SEC table
-			secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
-			secCursor.updateCurrentRowFromMap(secRow);
-			LOGGER.info("Updated SEC table for symbol {}", symbol);
 		} else {
 			quoteTime = (LocalDateTime) msmRow.get("dt");
 		}
@@ -186,6 +191,15 @@ public class MsmSecurity extends MsmInstrument {
 				// Check for existing quote for this quote date
 				if (rowDate.equals(quoteDate)) {
 					if (src == SRC_ONLINE || src == SRC_MANUAL) {
+						if (workingStatus == UpdateStatus.STALE) {
+							if ((double) spRow.get("dChange") == 0) {
+								LOGGER.info("Received stale quote data for symbol {}: no further processing required, timestamp={}", symbol, quoteTime);
+								return;
+							} else {
+								LOGGER.info("Received stale quote data for symbol {}: setting SP change to zero", symbol);
+								msmRow.put("dChange", 0);
+							}
+						}
 						// Merge quote row into SP row and write to SP table
 						spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 						spCursor.updateCurrentRowFromMap(spRow);
@@ -199,13 +213,14 @@ public class MsmSecurity extends MsmInstrument {
 				if (spIt.hasNext()) {
 					spRow = spIt.next();
 					continue;
-				} else {
-					break;
 				}
+				break;
 			}
 		}
 
-		if (highestSpRow.isEmpty()) {
+		if (highestSpRow.isEmpty())
+
+		{
 			LOGGER.info("Cannot find quote for symbol {} in SP table with timestamp earlier than new quote timestamp", symbol);
 		} else {
 			LOGGER.info("Found previous quote for symbol {} in SP table: price={}, hsp={}, timestamp={}", symbol, highestSpRow.get("dPrice"), highestSpRow.get("hsp"), highestSpRow.get("dt"));

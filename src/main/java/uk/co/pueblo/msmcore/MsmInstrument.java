@@ -22,19 +22,35 @@ public abstract class MsmInstrument {
 	// Constants
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
-	static final int UPDATE_OK = 0;
-	static final int UPDATE_WARN = 1;
-	static final int UPDATE_ERROR = 2;
-	static final int UPDATE_SKIP = 3;
 
 	// Class variables
-	static Map<String, int[]> summary = new HashMap<>();
-	static int finalStatus = UPDATE_OK;
+	private static Map<String, int[]> summary = new HashMap<>();
+	private static UpdateStatus finalStatus = UpdateStatus.OK;
 
 	// Instance variables
-	int workingStatus;
-	protected final List<String[]> msmSymbols = new ArrayList<>();
-	protected final List<String> msmSymbolsCheck = new ArrayList<>();
+	UpdateStatus workingStatus;
+	final List<String[]> msmSymbols = new ArrayList<>();
+	final List<String> msmSymbolsCheck = new ArrayList<>();
+
+	// Quote update status
+	enum UpdateStatus {
+		OK(0, "OK=", Level.INFO), WARN(1, "warnings=", Level.WARN), ERROR(2, "errors=", Level.ERROR), SKIP(3, "skipped=", Level.INFO), STALE(4, "stale=", Level.INFO);
+
+		final int index;
+		final String label;
+		final Level level;;
+
+		static final int size;
+		static {
+			size = values().length;
+		}
+
+		UpdateStatus(int index, String label, Level level) {
+			this.index = index;
+			this.label = label;
+			this.level = level;
+		}
+	}
 
 	abstract void update(Map<String, String> inRow) throws IOException;
 
@@ -69,11 +85,11 @@ public abstract class MsmInstrument {
 
 		String symbol = outRow.get("xSymbol");
 		if (msmSymbolsCheck.contains(symbol)) {
-			emitLogMsgs(outRow.get("xSymbol"), new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new Level[] { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN });
+			emitLogMsgs(outRow.get("xSymbol"), new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new UpdateStatus[] { UpdateStatus.ERROR, UpdateStatus.ERROR, UpdateStatus.WARN, UpdateStatus.WARN });
 		} else {
 			// Reject if symbol is not in symbols list
 			LOGGER.error("Cannot find symbol {} in symbols list", symbol);
-			workingStatus = UPDATE_ERROR;
+			workingStatus = UpdateStatus.ERROR;
 		}
 
 		return outRow;
@@ -144,18 +160,17 @@ public abstract class MsmInstrument {
 			}
 		}
 
-		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid required quote data", "Required default values applied", "Invalid optional quote data", "Optional default values applied" }, invalidCols, new Level[] { Level.ERROR, Level.ERROR, Level.WARN, Level.WARN });
+		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid required quote data", "Required default values applied", "Invalid optional quote data", "Optional default values applied" }, invalidCols, new UpdateStatus[] { UpdateStatus.ERROR, UpdateStatus.ERROR, UpdateStatus.WARN, UpdateStatus.WARN });
 		return msmRow;
 	}
 
-	private void emitLogMsgs(String symbol, String msgPrefix[], StringJoiner msgCols[], Level logLevel[]) {
-		int tmpStatus;
+	private void emitLogMsgs(String symbol, String msgPrefix[], StringJoiner msgCols[], UpdateStatus msgStatus[]) {
 		for (int i = 0; i < msgPrefix.length; i++) {
 			String columns = msgCols[i].toString();
 			if (!columns.isEmpty()) {
-				LOGGER.log(logLevel[i], "{} for symbol {}: {}", msgPrefix[i], symbol, columns);
-				if ((tmpStatus = UPDATE_ERROR + 2 - logLevel[i].intLevel() / 100) > workingStatus) {
-					workingStatus = tmpStatus;
+				LOGGER.log(msgStatus[i].level, "{} for symbol {}: {}", msgPrefix[i], symbol, columns);
+				if (msgStatus[i].level.isMoreSpecificThan(workingStatus.level)) {
+					workingStatus = msgStatus[i];
 				}
 			}
 		}
@@ -163,11 +178,11 @@ public abstract class MsmInstrument {
 
 	void incSummary(String quoteType) {
 		// Increment summary counters
-		summary.putIfAbsent(quoteType, new int[UPDATE_SKIP + 1]); // OK, warning, error, skipped
+		summary.putIfAbsent(quoteType, new int[UpdateStatus.size]); // OK, warning, error, skipped, stale
 		int[] count = summary.get(quoteType);
-		count[workingStatus]++;
+		count[workingStatus.index]++;
 		summary.put(quoteType, count);
-		if (workingStatus > finalStatus && workingStatus < UPDATE_SKIP) {
+		if (workingStatus.level.isMoreSpecificThan(finalStatus.level)) {
 			finalStatus = workingStatus;
 		}
 		return;
@@ -176,10 +191,16 @@ public abstract class MsmInstrument {
 	public static int logSummary() {
 		// Output summary to log
 		summary.forEach((key, count) -> {
-			int processed = count[0] + count[1] + count[2] + count[3];
-			LOGGER.info("Summary for quote type {}: processed={} [OK={}, warnings={}, errors={}, skipped={}]", key, processed, count[0], count[1], count[2], count[3]);
+			StringJoiner logSj = new StringJoiner(", ");
+			int sum = 0;
+			for (UpdateStatus updateStatus : UpdateStatus.values()) {
+				logSj.add(updateStatus.label + count[updateStatus.index]);
+				sum += count[updateStatus.index];
+			}
+			LOGGER.info("Summary for quote type {}: processed={} [{}]", key, sum, logSj.toString());
 		});
-		return finalStatus;
+
+		return 4 - finalStatus.level.intLevel() / 100;
 	}
 
 	static Properties openProperties(String propsFile) {
