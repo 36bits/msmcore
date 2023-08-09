@@ -125,7 +125,6 @@ public class MsmSecurity extends MsmInstrument {
 			} else if (ChronoUnit.DAYS.between(quoteTime, LocalDateTime.now()) > Long.parseLong(PROPS.getProperty("quote.staledays"))) {
 				// Quote data is stale
 				workingStatus = UpdateStatus.STALE;
-				incSummary(quoteType);
 			} else {
 				// Skip update
 				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
@@ -194,6 +193,7 @@ public class MsmSecurity extends MsmInstrument {
 						if (workingStatus == UpdateStatus.STALE) {
 							if ((double) spRow.get("dChange") == 0) {
 								LOGGER.info("Received stale quote data for symbol {}: no further processing required, timestamp={}", symbol, quoteTime);
+								incSummary(quoteType);
 								return;
 							} else {
 								LOGGER.info("Received stale quote data for symbol {}: setting SP change to zero", symbol);
