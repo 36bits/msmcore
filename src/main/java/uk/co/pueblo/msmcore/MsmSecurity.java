@@ -192,11 +192,12 @@ public class MsmSecurity extends MsmInstrument {
 					if (src == SRC_ONLINE || src == SRC_MANUAL) {
 						if (workingStatus == UpdateStatus.STALE) {
 							if ((double) spRow.get("dChange") == 0) {
-								LOGGER.info("Received stale quote data for symbol {}: no further processing required, timestamp={}", symbol, quoteTime);
+								LOGGER.info("Skipped update for symbol {}, received quote data is stale: timestamp={}", symbol, quoteTime);
+								workingStatus = UpdateStatus.SKIP;
 								incSummary(quoteType);
 								return;
 							} else {
-								LOGGER.info("Received stale quote data for symbol {}: setting SP change to zero", symbol);
+								LOGGER.info("Received stale quote data for symbol {}, setting SP change to zero", symbol);
 								msmRow.put("dChange", 0);
 							}
 						}
