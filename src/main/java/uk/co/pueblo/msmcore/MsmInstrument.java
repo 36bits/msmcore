@@ -134,9 +134,9 @@ public abstract class MsmInstrument {
 						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+\\.?\\d+")) {
 							// Double values
 							msmRow.put(propCol, Double.parseDouble(value));
-						} else if (propCol.equals("xSymbol") && value.length() > 12) {
+						} else if (propCol.equals("xSymbol") && value.length() > 15) {
 							// symbol to truncate
-							String newValue = value.substring(0, 12);
+							String newValue = value.substring(0, 15);
 							LOGGER.info("Truncated symbol {} to {}", value, newValue);
 							msmRow.put(propCol, newValue);
 						} else if (propCol.startsWith("x")) {
