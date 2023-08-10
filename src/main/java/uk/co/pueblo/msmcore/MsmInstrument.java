@@ -22,6 +22,8 @@ public abstract class MsmInstrument {
 	// Constants
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
+	static final int MAX_SYMBOL_SZ = 15; // Money exchange prefix + symbol
+	
 
 	// Class variables
 	private static Map<String, int[]> summary = new HashMap<>();
@@ -134,9 +136,9 @@ public abstract class MsmInstrument {
 						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+\\.?\\d+")) {
 							// Double values
 							msmRow.put(propCol, Double.parseDouble(value));
-						} else if (propCol.equals("xSymbol") && value.length() > 15) {
+						} else if (propCol.equals("xSymbol") && value.length() > MAX_SYMBOL_SZ) {
 							// symbol to truncate
-							String newValue = value.substring(0, 15);
+							String newValue = value.substring(0, MAX_SYMBOL_SZ);
 							LOGGER.info("Truncated symbol {} to {}", value, newValue);
 							msmRow.put(propCol, newValue);
 						} else if (propCol.startsWith("x")) {
