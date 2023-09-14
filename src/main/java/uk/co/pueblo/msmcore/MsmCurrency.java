@@ -60,7 +60,7 @@ public class MsmCurrency extends MsmInstrument {
 			}
 		}
 		for (int i = 0; i < msmSymbolsCheck.size(); i++) {
-			String symbol = defIsoCode + msmSymbolsCheck.get(i);
+			String symbol = defIsoCode + msmSymbolsCheck.get(i) + "=X"; // MSM currency pair pseudo-symbol is FOOBAR=X
 			msmSymbolsCheck.set(i, symbol);
 			msmSymbols.add(new String[] { symbol });
 		}
