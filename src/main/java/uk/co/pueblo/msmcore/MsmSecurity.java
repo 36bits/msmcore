@@ -242,7 +242,7 @@ public class MsmSecurity extends MsmInstrument {
 	public void addNewSpRows() throws IOException {
 		if (!newSpRows.isEmpty()) {
 			spTable.addRowsFromMaps(newSpRows);
-			LOGGER.info("Added new quotes to SP table from SP table append list: quotes added={}, total SP table rows={}", newSpRows.size(), spTable.getRowCount());
+			LOGGER.info("Added {} new {} to SP table from SP table append list, total SP table rows={}", newSpRows.size(), newSpRows.size() == 1 ? "quote" : "quotes", spTable.getRowCount());			
 		}
 		return;
 	}
