@@ -17,8 +17,6 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.util.IterableBuilder;
 
-import uk.co.pueblo.msmcore.MsmDb.DhdColumn;
-
 public class MsmCurrency extends MsmInstrument {
 
 	// Constants
@@ -35,7 +33,7 @@ public class MsmCurrency extends MsmInstrument {
 	public MsmCurrency(MsmDb msmDb) throws IOException {
 
 		Database db = msmDb.getDb();
-		int defHcrnc = msmDb.getDhdVal(DhdColumn.BASE_CURRENCY.getName());
+		int defHcrnc = msmDb.getDhdInt("hcrncDef"); // get the base currency
 
 		// Open the currency tables
 		crncTable = db.getTable(CRNC_TABLE);

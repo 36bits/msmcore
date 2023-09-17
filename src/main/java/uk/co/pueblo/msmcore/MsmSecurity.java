@@ -1,6 +1,7 @@
 package uk.co.pueblo.msmcore;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -21,6 +22,8 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.util.IterableBuilder;
 
+import uk.co.pueblo.msmcore.MsmDb.DhdDataValue;
+
 public class MsmSecurity extends MsmInstrument {
 
 	// Constants
@@ -32,27 +35,25 @@ public class MsmSecurity extends MsmInstrument {
 	private static final Properties PROPS = openProperties("MsmSecurity.properties");
 
 	// Instance variables
+	private final MsmDb msmDb;
 	private final Table secTable;
 	private final Table spTable;
 	private ArrayList<Map<String, Object>> newSpRows = new ArrayList<>();
 	private int hsp = 0;
 
 	// Constructor
-	public MsmSecurity(MsmDb msmDb) throws IOException {
+	public MsmSecurity(MsmDb msmDb) throws IOException, SQLException {
 
+		this.msmDb = msmDb;
 		Database db = msmDb.getDb();
 
 		// Open the securities tables
 		secTable = db.getTable(SEC_TABLE);
 		spTable = db.getTable(SP_TABLE);
 
-		// Get current hsp (SP table index)
-		IndexCursor spCursor = CursorBuilder.createCursor(spTable.getPrimaryKeyIndex());
-		spCursor.afterLast();
-		if (spCursor.getPreviousRow() != null) {
-			hsp = (int) spCursor.getCurrentRowValue(spTable.getColumn("hsp"));
-		}
-		LOGGER.debug("Current highest hsp={}", hsp);
+		// Get the next hsp (SP table primary key)
+		hsp = msmDb.getDhdDataInt(DhdDataValue.SP_NEXT_PK);
+		LOGGER.debug("Next hsp={}", hsp);
 
 		// Build lists of security symbols and corresponding country codes
 		Map<String, Object> row = null;
@@ -157,7 +158,8 @@ public class MsmSecurity extends MsmInstrument {
 
 			// Get difference in days between dates of first and last rows and quote date
 			LocalDate quoteDate = ((LocalDateTime) msmRow.get("dt")).toLocalDate();
-			// long firstDaysDiff = Math.abs(Duration.between(firstDate, quoteDate).toDays());
+			// long firstDaysDiff = Math.abs(Duration.between(firstDate,
+			// quoteDate).toDays());
 			long firstDaysDiff = Math.abs(ChronoUnit.DAYS.between(firstDate, quoteDate));
 			long lastDaysDiff = Math.abs(ChronoUnit.DAYS.between(lastDate, quoteDate));
 			LOGGER.debug("Timestamps: first={}, last={}, quote={}", firstDate, lastDate, quoteDate);
@@ -228,21 +230,21 @@ public class MsmSecurity extends MsmInstrument {
 		}
 
 		// Add quote row to SP row append list
-		hsp++;
 		spRow.put("hsp", hsp);
 		spRow.put("hsec", hsec);
 		spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 		newSpRows.add(spRow);
-		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), spRow.get("hsp"), quoteTime);
+		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), hsp++, quoteTime);
 
 		incSummary(quoteType);
 		return;
 	}
 
-	public void addNewSpRows() throws IOException {
+	public void addNewRows() throws IOException, SQLException {
 		if (!newSpRows.isEmpty()) {
 			spTable.addRowsFromMaps(newSpRows);
-			LOGGER.info("Added {} new {} to SP table from SP table append list, total SP table rows={}", newSpRows.size(), newSpRows.size() == 1 ? "quote" : "quotes", spTable.getRowCount());			
+			LOGGER.info("Added {} new {} to SP table from SP table append list, total SP table rows={}", newSpRows.size(), newSpRows.size() == 1 ? "quote" : "quotes", spTable.getRowCount());
+			msmDb.setDhdDataInt(DhdDataValue.SP_NEXT_PK, hsp);
 		}
 		return;
 	}
