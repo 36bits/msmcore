@@ -22,7 +22,7 @@ public abstract class MsmInstrument {
 	// Constants
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
-	static final int MAX_SYMBOL_SZ = 15; // Money exchange prefix + symbol
+	static final int MAX_SYMBOL_SZ = 12; // Money symbol size excluding exchange prefix
 	
 
 	// Class variables
@@ -85,9 +85,17 @@ public abstract class MsmInstrument {
 			}
 		}
 
+		// If symbol does not have an MSM exchange prefix then truncate if required
 		String symbol = outRow.get("xSymbol");
+		if (symbol.length() > MAX_SYMBOL_SZ && (symbol.charAt(2) != ':' || symbol.charAt(3) != ':')) {
+			String newSymbol = symbol.substring(0, MAX_SYMBOL_SZ);
+			LOGGER.info("Truncated symbol {} to {}", symbol, newSymbol);
+			outRow.put("xSymbol", newSymbol);
+			symbol = newSymbol;
+		}		
+		
 		if (msmSymbolsCheck.contains(symbol)) {
-			emitLogMsgs(outRow.get("xSymbol"), new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new UpdateStatus[] { UpdateStatus.ERROR, UpdateStatus.ERROR, UpdateStatus.WARN, UpdateStatus.WARN });
+			emitLogMsgs(symbol, new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new UpdateStatus[] { UpdateStatus.ERROR, UpdateStatus.ERROR, UpdateStatus.WARN, UpdateStatus.WARN });
 		} else {
 			// Reject if symbol is not in symbols list
 			LOGGER.error("Cannot find symbol {} in symbols list", symbol);
@@ -136,11 +144,6 @@ public abstract class MsmInstrument {
 						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+\\.?\\d+")) {
 							// Double values
 							msmRow.put(propCol, Double.parseDouble(value));
-						} else if (propCol.equals("xSymbol") && value.length() > MAX_SYMBOL_SZ) {
-							// symbol to truncate
-							String newValue = value.substring(0, MAX_SYMBOL_SZ);
-							LOGGER.info("Truncated symbol {} to {}", value, newValue);
-							msmRow.put(propCol, newValue);
 						} else if (propCol.startsWith("x")) {
 							// msmquote internal values
 							msmRow.put(propCol, value);
