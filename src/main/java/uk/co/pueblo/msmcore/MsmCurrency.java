@@ -69,24 +69,16 @@ public class MsmCurrency extends MsmInstrument {
 	 * 
 	 * @param sourceRow a row containing the currency quote data to update
 	 * @throws IOException
+	 * @throws MsmInstrumentException
 	 */
-	public void update(Map<String, String> sourceRow) throws IOException {
+	public UpdateStatus update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
 
 		// Validate incoming row
-		workingStatus = UpdateStatus.OK;
+		updateStatus = UpdateStatus.OK;
 		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS));
-		String quoteType = validatedRow.get("xType").toString();
-		if (workingStatus == UpdateStatus.ERROR) {
-			incSummary(quoteType);
-			return;
-		}
 
 		// Now build MSM row
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));
-		if (workingStatus == UpdateStatus.ERROR) {
-			incSummary(quoteType);
-			return;
-		}
 
 		String symbol = msmRow.get("xSymbol").toString();
 		LOGGER.info("Updating exchange rate for symbol {}", symbol);
@@ -120,21 +112,14 @@ public class MsmCurrency extends MsmInstrument {
 					fxRow.putAll(msmRow); // TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
+					return UpdateStatus.OK;
 				} else {
-					workingStatus = UpdateStatus.SKIP;
-					LOGGER.log(workingStatus.level, "Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
+					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
+					return UpdateStatus.SKIP;
 				}
-				break;
 			}
 		}
-
-		if (i == 2) {
-			workingStatus = UpdateStatus.ERROR;
-			LOGGER.log(workingStatus.level, "Cannot find previous exchange rate");
-		}
-
-		incSummary(quoteType);
-		return;
+		throw new MsmInstrumentException("Cannot find previous exchange rate", UpdateStatus.ERROR);
 	}
 
 	/**

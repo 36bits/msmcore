@@ -23,26 +23,21 @@ public abstract class MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
 	static final int MAX_SYMBOL_SZ = 12; // Money symbol size excluding exchange prefix
-	
-
-	// Class variables
-	private static Map<String, int[]> summary = new HashMap<>();
-	private static UpdateStatus finalStatus = UpdateStatus.OK;
 
 	// Instance variables
-	UpdateStatus workingStatus;
+	UpdateStatus updateStatus = UpdateStatus.OK;
 	final List<String[]> msmSymbols = new ArrayList<>();
 	final List<String> msmSymbolsCheck = new ArrayList<>();
 
 	// Quote update status
-	enum UpdateStatus {
-		OK(0, "OK=", Level.INFO), WARN(1, "warnings=", Level.WARN), ERROR(2, "errors=", Level.ERROR), SKIP(3, "skipped=", Level.INFO), STALE(4, "stale=", Level.INFO);
+	public enum UpdateStatus {
+		OK(0, "OK=", Level.INFO), WARN(1, "warnings=", Level.WARN), ERROR(2, "errors=", Level.ERROR), FATAL(3, null, Level.FATAL), SKIP(4, "skipped=", Level.INFO), STALE(5, "stale=", Level.INFO);
 
-		final int index;
-		final String label;
-		final Level level;;
+		public final int index;
+		public final String label;
+		public final Level level;;
 
-		static final int size;
+		public static final int size;
 		static {
 			size = values().length;
 		}
@@ -53,34 +48,40 @@ public abstract class MsmInstrument {
 			this.level = level;
 		}
 	}
+	
+	abstract UpdateStatus update(Map<String, String> inRow) throws IOException, MsmInstrumentException;
 
-	abstract void update(Map<String, String> inRow) throws IOException;
-
-	Map<String, String> validateQuoteRow(Map<String, String> inRow, Properties props) {
+	Map<String, String> validateQuoteRow(Map<String, String> inRow, Properties props) throws MsmInstrumentException {
 		Map<String, String> outRow = new HashMap<>();
 		String prop;
-		StringJoiner missingCols[] = { new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", ") }; // required, required defaults, optional, optional defaults
-		String columnSet = "column.";
-		int pass;
-		int index = 1;
 
-		for (pass = 0; pass < missingCols.length; pass += 2) {
-			if (pass == 2) {
-				columnSet = columnSet + inRow.get("xType") + '.';
-				index = 1;
+		// Validate required values
+		String columnSet = "column.";
+		int index = 1;
+		while ((prop = props.getProperty(columnSet + index++)) != null) {
+			if (inRow.containsKey(prop)) {
+				outRow.put(prop, inRow.get(prop));
+			} else {
+				throw new MsmInstrumentException("Required quote data missing for symbol " + inRow.get("xSymbol") + ": " + prop, UpdateStatus.ERROR);
 			}
-			while ((prop = props.getProperty(columnSet + index++)) != null) {
-				String propArray[] = prop.split(",");
-				String column = propArray[0];
-				if (inRow.containsKey(column)) {
-					outRow.put(column, inRow.get(column));
-				} else {
-					missingCols[pass].add(column);
-					// Add default value to row
-					if (propArray.length == 2) {
-						outRow.put(column, propArray[1]);
-						missingCols[pass + 1].add(column);
-					}
+		}
+
+		// Validate optional values
+		columnSet = columnSet + inRow.get("xType") + '.';
+		index = 1;
+		StringJoiner missingCols[] = { new StringJoiner(", "), new StringJoiner(", ") }; // optional, optional defaults
+		while ((prop = props.getProperty(columnSet + index++)) != null) {
+			String propArray[] = prop.split(",");
+			String column = propArray[0];
+			if (inRow.containsKey(column)) {
+				outRow.put(column, inRow.get(column));
+			} else {
+				missingCols[0].add(column);
+				updateStatus = UpdateStatus.WARN;
+				// Add default value to row
+				if (propArray.length == 2) {
+					outRow.put(column, propArray[1]);
+					missingCols[1].add(column);
 				}
 			}
 		}
@@ -92,28 +93,27 @@ public abstract class MsmInstrument {
 			LOGGER.info("Truncated symbol {} to {}", symbol, newSymbol);
 			outRow.put("xSymbol", newSymbol);
 			symbol = newSymbol;
-		}		
-		
-		if (msmSymbolsCheck.contains(symbol)) {
-			emitLogMsgs(symbol, new String[] { "Required quote data missing", "Required default values applied", "Optional quote data missing", "Optional default values applied" }, missingCols, new UpdateStatus[] { UpdateStatus.ERROR, UpdateStatus.ERROR, UpdateStatus.WARN, UpdateStatus.WARN });
-		} else {
-			// Reject if symbol is not in symbols list
-			LOGGER.error("Cannot find symbol {} in symbols list", symbol);
-			workingStatus = UpdateStatus.ERROR;
 		}
 
+		if (msmSymbolsCheck.contains(symbol)) {
+			emitLogMsgs(symbol, new String[] { "Optional quote data missing", "Optional default values applied" }, missingCols);
+		} else {
+			// Reject if symbol is not in symbols list
+			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in symbols list", UpdateStatus.ERROR);
+		}
+		
 		return outRow;
 	}
 
 	Map<String, Object> buildMsmRow(Map<String, String> inRow, Properties props) {
 		Map<String, Object> msmRow = new HashMap<>();
 		String prop;
-		StringJoiner invalidCols[] = { new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", ") }; // required, required defaults, optional, optional defaults
+		StringJoiner invalidCols[] = { new StringJoiner(", "), new StringJoiner(", ") }; // invalid quota data, default value
 		String columnSet = "column.";
 		int index = 1;
 
-		for (int pass = 0; pass < invalidCols.length; pass += 2) {
-			if (pass == 2) {
+		for (int pass = 0; pass < 2; pass++) {
+			if (pass == 1) {
 				columnSet = columnSet + msmRow.get("xType") + '.';
 				index = 1;
 			}
@@ -152,10 +152,11 @@ public abstract class MsmInstrument {
 							msmRow.put(propCol, Long.parseLong(value));
 						} else {
 							// Try again with the default value if there is one
-							invalidCols[pass].add(propCol + "=" + value);
+							invalidCols[0].add(propCol + "=" + value);
+							updateStatus = UpdateStatus.WARN;
 							if (propArray.length == 2) {
 								value = propArray[1];
-								invalidCols[pass + 1].add(propCol);
+								invalidCols[1].add(propCol);
 								continue;
 							}
 						}
@@ -163,49 +164,18 @@ public abstract class MsmInstrument {
 					}
 				}
 			}
-		}
-
-		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid required quote data", "Required default values applied", "Invalid optional quote data", "Optional default values applied" }, invalidCols, new UpdateStatus[] { UpdateStatus.ERROR, UpdateStatus.ERROR, UpdateStatus.WARN, UpdateStatus.WARN });
+		}	
+		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid quote data", "Default values applied" }, invalidCols);
 		return msmRow;
 	}
 
-	private void emitLogMsgs(String symbol, String msgPrefix[], StringJoiner msgCols[], UpdateStatus msgStatus[]) {
+	private void emitLogMsgs(String symbol, String msgPrefix[], StringJoiner msgCols[]) {
 		for (int i = 0; i < msgPrefix.length; i++) {
 			String columns = msgCols[i].toString();
 			if (!columns.isEmpty()) {
-				LOGGER.log(msgStatus[i].level, "{} for symbol {}: {}", msgPrefix[i], symbol, columns);
-				if (msgStatus[i].level.isMoreSpecificThan(workingStatus.level)) {
-					workingStatus = msgStatus[i];
-				}
+				LOGGER.warn("{} for symbol {}: {}", msgPrefix[i], symbol, columns);
 			}
 		}
-	}
-
-	void incSummary(String quoteType) {
-		// Increment summary counters
-		summary.putIfAbsent(quoteType, new int[UpdateStatus.size]); // OK, warning, error, skipped, stale
-		int[] count = summary.get(quoteType);
-		count[workingStatus.index]++;
-		summary.put(quoteType, count);
-		if (workingStatus.level.isMoreSpecificThan(finalStatus.level)) {
-			finalStatus = workingStatus;
-		}
-		return;
-	}
-
-	public static int logSummary() {
-		// Output summary to log
-		summary.forEach((key, count) -> {
-			StringJoiner logSj = new StringJoiner(", ");
-			int sum = 0;
-			for (UpdateStatus updateStatus : UpdateStatus.values()) {
-				logSj.add(updateStatus.label + count[updateStatus.index]);
-				sum += count[updateStatus.index];
-			}
-			LOGGER.info("Summary for quote type {}: processed={} [{}]", key, sum, logSj.toString());
-		});
-
-		return 4 - finalStatus.level.intLevel() / 100;
 	}
 
 	static Properties openProperties(String propsFile) {

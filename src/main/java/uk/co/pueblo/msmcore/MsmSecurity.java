@@ -76,25 +76,19 @@ public class MsmSecurity extends MsmInstrument {
 	 * Updates the SEC and SP tables with the supplied quote row.
 	 * 
 	 * @param sourceRow the row containing the quote data to update
+	 * @return 
 	 * @throws IOException
+	 * @throws MsmInstrumentException 
 	 */
-	public void update(Map<String, String> sourceRow) throws IOException {
+	public UpdateStatus update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
 
 		// Validate incoming row
-		workingStatus = UpdateStatus.OK;
+		updateStatus = UpdateStatus.OK;
 		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS));
 		String quoteType = validatedRow.get("xType").toString();
-		if (workingStatus == UpdateStatus.ERROR) {
-			incSummary(quoteType);
-			return;
-		}
-
+		
 		// Now build MSM row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));
-		if (workingStatus == UpdateStatus.ERROR) {
-			incSummary(quoteType);
-			return;
-		}
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));		
 
 		String symbol = msmRow.get("xSymbol").toString();
 		LOGGER.info("Updating quote data for symbol {}, quote type={}", symbol, quoteType);
@@ -108,10 +102,7 @@ public class MsmSecurity extends MsmInstrument {
 			hsec = (int) secRow.get("hsec");
 			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
 		} else {
-			workingStatus = UpdateStatus.ERROR;
-			LOGGER.log(workingStatus.level, "Cannot find symbol {} in SEC table", symbol);
-			incSummary(quoteType);
-			return;
+			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in SEC table", UpdateStatus.ERROR);
 		}
 
 		// Update SEC table
@@ -125,13 +116,11 @@ public class MsmSecurity extends MsmInstrument {
 				LOGGER.info("Updated SEC table for symbol {}", symbol);
 			} else if (ChronoUnit.DAYS.between(quoteTime, LocalDateTime.now()) > Long.parseLong(PROPS.getProperty("quote.staledays"))) {
 				// Quote data is stale
-				workingStatus = UpdateStatus.STALE;
+				updateStatus = UpdateStatus.STALE;
 			} else {
 				// Skip update
 				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
-				workingStatus = UpdateStatus.SKIP;
-				incSummary(quoteType);
-				return;
+				return UpdateStatus.SKIP;
 			}
 		} else {
 			quoteTime = (LocalDateTime) msmRow.get("dt");
@@ -192,12 +181,10 @@ public class MsmSecurity extends MsmInstrument {
 				// Check for existing quote for this quote date
 				if (rowDate.equals(quoteDate)) {
 					if (src == SRC_ONLINE || src == SRC_MANUAL) {
-						if (workingStatus == UpdateStatus.STALE) {
+						if (updateStatus == UpdateStatus.STALE) {
 							if ((double) spRow.get("dChange") == 0) {
 								LOGGER.info("Skipped update for symbol {}, received quote data is stale: timestamp={}", symbol, quoteTime);
-								workingStatus = UpdateStatus.SKIP;
-								incSummary(quoteType);
-								return;
+								return UpdateStatus.SKIP;
 							} else {
 								LOGGER.info("Received stale quote data for symbol {}, setting SP change to zero", symbol);
 								msmRow.put("dChange", 0);
@@ -207,8 +194,7 @@ public class MsmSecurity extends MsmInstrument {
 						spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 						spCursor.updateCurrentRowFromMap(spRow);
 						LOGGER.info("Updated previous quote for symbol {} in SP table: new price={}, timestamp={}", symbol, spRow.get("dPrice"), quoteTime);
-						incSummary(quoteType);
-						return;
+						return updateStatus;
 					}
 					break;
 				}
@@ -236,8 +222,7 @@ public class MsmSecurity extends MsmInstrument {
 		newSpRows.add(spRow);
 		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), hsp++, quoteTime);
 
-		incSummary(quoteType);
-		return;
+		return updateStatus;
 	}
 
 	public void addNewRows() throws IOException, SQLException {
