@@ -88,7 +88,7 @@ public abstract class MsmInstrument {
 
 		// If symbol does not have an MSM exchange prefix then truncate if required
 		String symbol = outRow.get("xSymbol");
-		if (symbol.length() > MAX_SYMBOL_SZ && (symbol.charAt(2) != ':' || symbol.charAt(3) != ':')) {
+		if (symbol.length() > MAX_SYMBOL_SZ && !symbol.matches("^\\$?..:.+")) {
 			String newSymbol = symbol.substring(0, MAX_SYMBOL_SZ);
 			LOGGER.info("Truncated symbol {} to {}", symbol, newSymbol);
 			outRow.put("xSymbol", newSymbol);
