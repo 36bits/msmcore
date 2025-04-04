@@ -7,13 +7,14 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.StringJoiner;
 
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -23,33 +24,30 @@ public abstract class MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
 	static final int MAX_SYMBOL_SZ = 12; // Money symbol size excluding exchange prefix
+	static final int UPDATE_OK = 0;
+	static final int UPDATE_WARN = 1;
+	static final int UPDATE_ERROR = 2;
 
 	// Instance variables
+	Map<String, int[]> summary = new HashMap<>();
 	UpdateStatus updateStatus = UpdateStatus.OK;
 	final List<String[]> msmSymbols = new ArrayList<>();
 	final List<String> msmSymbolsCheck = new ArrayList<>();
 
 	// Quote update status
 	public enum UpdateStatus {
-		OK(0, "OK=", Level.INFO), WARN(1, "warnings=", Level.WARN), ERROR(2, "errors=", Level.ERROR), FATAL(3, null, Level.FATAL), SKIP(4, "skipped=", Level.INFO), STALE(5, "stale=", Level.INFO);
+		OK("updated OK=", UPDATE_OK), MISSING_OPTIONAL("missing optional data=", UPDATE_WARN), MISSING_REQUIRED("missing required data=", UPDATE_ERROR), NOT_FOUND("not found=", UPDATE_ERROR),	NO_CHANGE("no change=", UPDATE_WARN), STALE("stale=", UPDATE_WARN);
 
-		public final int index;
-		public final String label;
-		public final Level level;;
+		public final String msg;
+		public final int status;
 
-		public static final int size;
-		static {
-			size = values().length;
-		}
-
-		UpdateStatus(int index, String label, Level level) {
-			this.index = index;
-			this.label = label;
-			this.level = level;
+		UpdateStatus(String msg, int status) {
+			this.msg = msg;
+			this.status = status;
 		}
 	}
-	
-	abstract UpdateStatus update(Map<String, String> inRow) throws IOException, MsmInstrumentException;
+
+	abstract void update(Map<String, String> inRow) throws IOException, MsmInstrumentException;
 
 	Map<String, String> validateQuoteRow(Map<String, String> inRow, Properties props) throws MsmInstrumentException {
 		Map<String, String> outRow = new HashMap<>();
@@ -62,12 +60,14 @@ public abstract class MsmInstrument {
 			if (inRow.containsKey(prop)) {
 				outRow.put(prop, inRow.get(prop));
 			} else {
-				throw new MsmInstrumentException("Required quote data missing for symbol " + inRow.get("xSymbol") + ": " + prop, UpdateStatus.ERROR);
+				incSummary(inRow.get("xType"), UpdateStatus.MISSING_REQUIRED); // TODO xType might be null
+				throw new MsmInstrumentException("Missing required quote data for symbol " + inRow.get("xSymbol") + ": " + prop); // TODO xSymbol might be null
 			}
 		}
 
 		// Validate optional values
-		columnSet = columnSet + inRow.get("xType") + '.';
+		String quoteType = inRow.get("xType");
+		columnSet = columnSet + quoteType + '.';
 		index = 1;
 		StringJoiner missingCols[] = { new StringJoiner(", "), new StringJoiner(", ") }; // optional, optional defaults
 		while ((prop = props.getProperty(columnSet + index++)) != null) {
@@ -76,8 +76,8 @@ public abstract class MsmInstrument {
 			if (inRow.containsKey(column)) {
 				outRow.put(column, inRow.get(column));
 			} else {
+				updateStatus = UpdateStatus.MISSING_OPTIONAL;
 				missingCols[0].add(column);
-				updateStatus = UpdateStatus.WARN;
 				// Add default value to row
 				if (propArray.length == 2) {
 					outRow.put(column, propArray[1]);
@@ -99,9 +99,10 @@ public abstract class MsmInstrument {
 			emitLogMsgs(symbol, new String[] { "Optional quote data missing", "Optional default values applied" }, missingCols);
 		} else {
 			// Reject if symbol is not in symbols list
-			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in symbols list", UpdateStatus.ERROR);
+			incSummary(quoteType, UpdateStatus.NOT_FOUND);
+			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in symbols list");
 		}
-		
+
 		return outRow;
 	}
 
@@ -153,7 +154,6 @@ public abstract class MsmInstrument {
 						} else {
 							// Try again with the default value if there is one
 							invalidCols[0].add(propCol + "=" + value);
-							updateStatus = UpdateStatus.WARN;
 							if (propArray.length == 2) {
 								value = propArray[1];
 								invalidCols[1].add(propCol);
@@ -164,7 +164,7 @@ public abstract class MsmInstrument {
 					}
 				}
 			}
-		}	
+		}
 		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid quote data", "Default values applied" }, invalidCols);
 		return msmRow;
 	}
@@ -192,5 +192,38 @@ public abstract class MsmInstrument {
 
 	public List<String[]> getSymbols() {
 		return msmSymbols;
+	}
+
+	void incSummary(String quoteType, UpdateStatus updateStatus) {
+		summary.putIfAbsent(quoteType, new int[UpdateStatus.values().length]);
+		int[] count = summary.get(quoteType);
+		count[updateStatus.ordinal()]++;
+		summary.put(quoteType, count);
+		return;
+	}
+
+	public int printSummary() {
+		int maxStatus = 0;
+		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL);
+		for (Map.Entry<String, int[]> entry : summary.entrySet()) {
+			StringJoiner msgSj = new StringJoiner(", ");
+			int total = 0;
+			int updated = 0;
+			int n = 0;
+			for (UpdateStatus updateStatus : UpdateStatus.values()) {
+				if ((n = entry.getValue()[updateStatus.ordinal()]) > 0) {
+					msgSj.add(updateStatus.msg + n);
+					total += n;
+					if (updatedSet.contains(updateStatus)) {
+						updated += n;
+					}
+					if (updateStatus.status > maxStatus) {
+						maxStatus = updateStatus.status;
+					}
+				}
+			}
+			LOGGER.info("Summary for quote type {}: updated={}/{} [{}]", entry.getKey(), updated, total, msgSj.toString());
+		}
+		return maxStatus;
 	}
 }

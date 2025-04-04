@@ -71,14 +71,10 @@ public class MsmCurrency extends MsmInstrument {
 	 * @throws IOException
 	 * @throws MsmInstrumentException
 	 */
-	public UpdateStatus update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
+	public void update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
 
-		// Validate incoming row
-		updateStatus = UpdateStatus.OK;
-		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS));
-
-		// Now build MSM row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));
+		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS)); // validate incoming row
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS)); // now build MSM row
 
 		String symbol = msmRow.get("xSymbol").toString();
 		LOGGER.info("Updating exchange rate for symbol {}", symbol);
@@ -89,6 +85,7 @@ public class MsmCurrency extends MsmInstrument {
 		hcrnc[1] = getHcrnc(symbol.substring(3, 6));
 
 		// Update exchange rate
+		String quoteType = msmRow.get("xType").toString();
 		double newRate = (double) msmRow.get("rate");
 		Map<String, Object> fxRowPattern = new HashMap<>();
 		IndexCursor fxCursor = CursorBuilder.createCursor(fxTable.getPrimaryKeyIndex());
@@ -111,15 +108,18 @@ public class MsmCurrency extends MsmInstrument {
 					// Merge quote row into FX row and write to FX table
 					fxRow.putAll(msmRow); // TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
+					incSummary(quoteType, UpdateStatus.OK);
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
-					return UpdateStatus.OK;
+					return;
 				} else {
+					incSummary(quoteType, UpdateStatus.NO_CHANGE);
 					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
-					return UpdateStatus.SKIP;
+					return;
 				}
 			}
 		}
-		throw new MsmInstrumentException("Cannot find previous exchange rate", UpdateStatus.ERROR);
+		incSummary(quoteType, UpdateStatus.NOT_FOUND);
+		throw new MsmInstrumentException("Cannot find previous exchange rate");
 	}
 
 	/**

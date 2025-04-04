@@ -76,21 +76,17 @@ public class MsmSecurity extends MsmInstrument {
 	 * Updates the SEC and SP tables with the supplied quote row.
 	 * 
 	 * @param sourceRow the row containing the quote data to update
-	 * @return 
+	 * @return
 	 * @throws IOException
-	 * @throws MsmInstrumentException 
+	 * @throws MsmInstrumentException
 	 */
-	public UpdateStatus update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
+	public void update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
 
-		// Validate incoming row
-		updateStatus = UpdateStatus.OK;
-		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS));
-		String quoteType = validatedRow.get("xType").toString();
-		
-		// Now build MSM row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS));		
+		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS)); // validate incoming row
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS)); // now build MSM row
 
 		String symbol = msmRow.get("xSymbol").toString();
+		String quoteType = validatedRow.get("xType").toString();
 		LOGGER.info("Updating quote data for symbol {}, quote type={}", symbol, quoteType);
 
 		// Find symbol in SEC table
@@ -102,7 +98,8 @@ public class MsmSecurity extends MsmInstrument {
 			hsec = (int) secRow.get("hsec");
 			LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
 		} else {
-			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in SEC table", UpdateStatus.ERROR);
+			incSummary(quoteType, UpdateStatus.NOT_FOUND);
+			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in SEC table");
 		}
 
 		// Update SEC table
@@ -119,8 +116,9 @@ public class MsmSecurity extends MsmInstrument {
 				updateStatus = UpdateStatus.STALE;
 			} else {
 				// Skip update
+				incSummary(quoteType, UpdateStatus.NO_CHANGE);
 				LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
-				return UpdateStatus.SKIP;
+				return;
 			}
 		} else {
 			quoteTime = (LocalDateTime) msmRow.get("dt");
@@ -183,8 +181,9 @@ public class MsmSecurity extends MsmInstrument {
 					if (src == SRC_ONLINE || src == SRC_MANUAL) {
 						if (updateStatus == UpdateStatus.STALE) {
 							if ((double) spRow.get("dChange") == 0) {
-								LOGGER.info("Skipped update for symbol {}, received quote data is stale: timestamp={}", symbol, quoteTime);
-								return UpdateStatus.SKIP;
+								incSummary(quoteType, updateStatus);
+								LOGGER.info("Skipped update for symbol {}, received stale quote data: timestamp={}", symbol, quoteTime);
+								return;
 							} else {
 								LOGGER.info("Received stale quote data for symbol {}, setting SP change to zero", symbol);
 								msmRow.put("dChange", 0);
@@ -193,8 +192,9 @@ public class MsmSecurity extends MsmInstrument {
 						// Merge quote row into SP row and write to SP table
 						spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 						spCursor.updateCurrentRowFromMap(spRow);
+						incSummary(quoteType, updateStatus);
 						LOGGER.info("Updated previous quote for symbol {} in SP table: new price={}, timestamp={}", symbol, spRow.get("dPrice"), quoteTime);
-						return updateStatus;
+						return;
 					}
 					break;
 				}
@@ -207,9 +207,7 @@ public class MsmSecurity extends MsmInstrument {
 			}
 		}
 
-		if (highestSpRow.isEmpty())
-
-		{
+		if (highestSpRow.isEmpty()) {
 			LOGGER.info("Cannot find quote for symbol {} in SP table with timestamp earlier than new quote timestamp", symbol);
 		} else {
 			LOGGER.info("Found previous quote for symbol {} in SP table: price={}, hsp={}, timestamp={}", symbol, highestSpRow.get("dPrice"), highestSpRow.get("hsp"), highestSpRow.get("dt"));
@@ -220,9 +218,9 @@ public class MsmSecurity extends MsmInstrument {
 		spRow.put("hsec", hsec);
 		spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 		newSpRows.add(spRow);
+		incSummary(quoteType, updateStatus);
 		LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), hsp++, quoteTime);
-
-		return updateStatus;
+		return;
 	}
 
 	public void addNewRows() throws IOException, SQLException {
