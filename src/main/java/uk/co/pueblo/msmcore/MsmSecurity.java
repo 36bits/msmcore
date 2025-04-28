@@ -81,6 +81,8 @@ public class MsmSecurity extends MsmInstrument {
 	 * @throws MsmInstrumentException
 	 */
 	public void update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
+		
+		updateStatus = UpdateStatus.OK;
 
 		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS)); // validate incoming row
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS)); // now build MSM row

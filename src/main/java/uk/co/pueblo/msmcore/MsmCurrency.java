@@ -72,6 +72,8 @@ public class MsmCurrency extends MsmInstrument {
 	 * @throws MsmInstrumentException
 	 */
 	public void update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
+		
+		updateStatus = UpdateStatus.OK;
 
 		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS)); // validate incoming row
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS)); // now build MSM row
@@ -108,7 +110,7 @@ public class MsmCurrency extends MsmInstrument {
 					// Merge quote row into FX row and write to FX table
 					fxRow.putAll(msmRow); // TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
-					incSummary(quoteType, UpdateStatus.OK);
+					incSummary(quoteType, updateStatus);
 					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
 					return;
 				} else {

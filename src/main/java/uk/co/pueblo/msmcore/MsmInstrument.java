@@ -30,7 +30,7 @@ public abstract class MsmInstrument {
 
 	// Instance variables
 	Map<String, int[]> summary = new HashMap<>();
-	UpdateStatus updateStatus = UpdateStatus.OK;
+	UpdateStatus updateStatus;
 	final List<String[]> msmSymbols = new ArrayList<>();
 	final List<String> msmSymbolsCheck = new ArrayList<>();
 
