@@ -96,7 +96,7 @@ public abstract class MsmInstrument {
 		}
 
 		if (msmSymbolsCheck.contains(symbol)) {
-			emitLogMsgs(symbol, new String[] { "Optional quote data missing", "Optional default values applied" }, missingCols);
+			emitLogMsgs(symbol, new String[] { "Missing optional quote data", "Applied optional quote data default values" }, missingCols);
 		} else {
 			// Reject if symbol is not in symbols list
 			incSummary(quoteType, UpdateStatus.NOT_FOUND);
