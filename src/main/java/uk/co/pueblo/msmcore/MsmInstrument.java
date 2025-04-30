@@ -81,7 +81,7 @@ public abstract class MsmInstrument {
 				// Add default value to row
 				if (propArray.length == 2) {
 					outRow.put(column, propArray[1]);
-					missingCols[1].add(column);
+					missingCols[1].add(column + "=" + propArray[1]);
 				}
 			}
 		}
