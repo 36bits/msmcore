@@ -36,7 +36,7 @@ public abstract class MsmInstrument {
 
 	// Quote update status
 	public enum UpdateStatus {
-		OK("updated OK=", UPDATE_OK), MISSING_OPTIONAL("missing optional data=", UPDATE_WARN), MISSING_REQUIRED("missing required data=", UPDATE_ERROR), NOT_FOUND("not found=", UPDATE_ERROR),	NO_CHANGE("no change=", UPDATE_WARN), STALE("stale=", UPDATE_WARN);
+		OK("updated OK=", UPDATE_OK), MISSING_OPTIONAL("missing optional data=", UPDATE_WARN), MISSING_REQUIRED("missing required data=", UPDATE_ERROR), NOT_FOUND("not found=", UPDATE_ERROR),	NO_CHANGE("no change=", UPDATE_WARN), STALE("stale=", UPDATE_WARN), NEW_STALE("new stale=", UPDATE_WARN);
 
 		public final String msg;
 		public final int status;
@@ -204,7 +204,7 @@ public abstract class MsmInstrument {
 
 	public int printSummary() {
 		int maxStatus = 0;
-		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL);
+		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL, UpdateStatus.NEW_STALE);
 		for (Map.Entry<String, int[]> entry : summary.entrySet()) {
 			StringJoiner msgSj = new StringJoiner(", ");
 			int total = 0;

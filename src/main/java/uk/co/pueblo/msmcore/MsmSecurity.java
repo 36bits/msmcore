@@ -106,6 +106,7 @@ public class MsmSecurity extends MsmInstrument {
 
 		// Update SEC table
 		LocalDateTime quoteTime;
+		long quoteAgeDays = 0;
 		if (msmRow.containsKey("dtLastUpdate")) {
 			quoteTime = (LocalDateTime) msmRow.get("dtLastUpdate");
 			if (!quoteTime.equals((LocalDateTime) secRow.get("dtLastUpdate"))) {
@@ -113,7 +114,7 @@ public class MsmSecurity extends MsmInstrument {
 				secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
 				secCursor.updateCurrentRowFromMap(secRow);
 				LOGGER.info("Updated SEC table for symbol {}", symbol);
-			} else if (ChronoUnit.DAYS.between(quoteTime, LocalDateTime.now()) > Long.parseLong(PROPS.getProperty("quote.staledays"))) {
+			} else if ((quoteAgeDays = ChronoUnit.DAYS.between(quoteTime, LocalDateTime.now())) > Long.parseLong(PROPS.getProperty("quote.staledays"))) {
 				// Quote data is stale
 				updateStatus = UpdateStatus.STALE;
 			} else {
@@ -184,11 +185,12 @@ public class MsmSecurity extends MsmInstrument {
 						if (updateStatus == UpdateStatus.STALE) {
 							if ((double) spRow.get("dChange") == 0) {
 								incSummary(quoteType, updateStatus);
-								LOGGER.info("Skipped update for symbol {}, received stale quote data: timestamp={}", symbol, quoteTime);
+								LOGGER.info("Skipped update for symbol {}, received stale quote data: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
 								return;
 							} else {
-								LOGGER.info("Received stale quote data for symbol {}, setting SP change to zero", symbol);
+								LOGGER.info("Received new stale quote data for symbol {}, setting change value in SP table to zero: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
 								msmRow.put("dChange", 0);
+								updateStatus = UpdateStatus.NEW_STALE;
 							}
 						}
 						// Merge quote row into SP row and write to SP table
