@@ -185,10 +185,10 @@ public class MsmSecurity extends MsmInstrument {
 						if (updateStatus == UpdateStatus.STALE) {
 							if ((double) spRow.get("dChange") == 0) {
 								incSummary(quoteType, updateStatus);
-								LOGGER.info("Skipped update for symbol {}, received stale quote data: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
+								LOGGER.warn("Skipped update for symbol {}, received stale quote data: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
 								return;
 							} else {
-								LOGGER.info("Received new stale quote data for symbol {}, setting change value in SP table to zero: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
+								LOGGER.warn("Received new stale quote data for symbol {}, setting change value in SP table to zero: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
 								msmRow.put("dChange", 0);
 								updateStatus = UpdateStatus.NEW_STALE;
 							}
