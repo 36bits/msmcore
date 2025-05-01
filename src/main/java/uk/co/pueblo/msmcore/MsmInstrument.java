@@ -24,9 +24,9 @@ public abstract class MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
 	static final int MAX_SYMBOL_SZ = 12; // Money symbol size excluding exchange prefix
-	static final int UPDATE_OK = 0;
-	static final int UPDATE_WARN = 1;
-	static final int UPDATE_ERROR = 2;
+	static final int EXIT_OK = 0;
+	static final int EXIT_WARN = 1;
+	static final int EXIT_ERROR = 2;
 
 	// Instance variables
 	Map<String, int[]> summary = new HashMap<>();
@@ -36,14 +36,14 @@ public abstract class MsmInstrument {
 
 	// Quote update status
 	public enum UpdateStatus {
-		OK("updated OK=", UPDATE_OK), MISSING_OPTIONAL("missing optional data=", UPDATE_WARN), MISSING_REQUIRED("missing required data=", UPDATE_ERROR), NOT_FOUND("not found=", UPDATE_ERROR),	NO_CHANGE("no change=", UPDATE_WARN), STALE("stale=", UPDATE_WARN), NEW_STALE("new stale=", UPDATE_WARN);
+		OK("updated OK=", EXIT_OK), MISSING_OPTIONAL("missing optional data=", EXIT_WARN), MISSING_REQUIRED("missing required data=", EXIT_ERROR), NOT_FOUND("not found=", EXIT_ERROR),	NO_CHANGE("no change=", EXIT_OK), STALE("stale=", EXIT_WARN), NEW_STALE("new stale=", EXIT_WARN);
 
 		public final String msg;
-		public final int status;
+		public final int exitCode;
 
-		UpdateStatus(String msg, int status) {
+		UpdateStatus(String msg, int exitCode) {
 			this.msg = msg;
-			this.status = status;
+			this.exitCode = exitCode;
 		}
 	}
 
@@ -202,8 +202,9 @@ public abstract class MsmInstrument {
 		return;
 	}
 
-	public int printSummary() {
-		int maxStatus = 0;
+	public UpdateStatus printSummary() {
+		UpdateStatus finalStatus = UpdateStatus.OK;
+		int maxExitCode = UpdateStatus.OK.exitCode;
 		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL, UpdateStatus.NEW_STALE);
 		for (Map.Entry<String, int[]> entry : summary.entrySet()) {
 			StringJoiner msgSj = new StringJoiner(", ");
@@ -217,13 +218,14 @@ public abstract class MsmInstrument {
 					if (updatedSet.contains(updateStatus)) {
 						updated += n;
 					}
-					if (updateStatus.status > maxStatus) {
-						maxStatus = updateStatus.status;
+					if (updateStatus.exitCode > maxExitCode) {
+						maxExitCode = updateStatus.exitCode;
+						finalStatus = updateStatus;
 					}
 				}
 			}
 			LOGGER.info("Summary for quote type {}: updated={}/{} [{}]", entry.getKey(), updated, total, msgSj.toString());
 		}
-		return maxStatus;
+		return finalStatus;
 	}
 }
