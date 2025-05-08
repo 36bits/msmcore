@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>uk.co.pueblo</groupId>
 	<artifactId>msmcore</artifactId>
-	<version>3.0.1-SNAPSHOT</version>
+	<version>3.1.0-SNAPSHOT</version>
 	<packaging>jar</packaging>
 	<name>msmcore</name>
 	<url>https://github.com/36bits/msmcore</url>
