@@ -23,7 +23,7 @@ public class MsmCurrency extends MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmCurrency.class);
 	private static final String CRNC_TABLE = "CRNC";
 	private static final String FX_TABLE = "CRNC_EXCHG";
-	private static final Properties PROPS = openProperties("MsmCurrency.properties");
+	private static final Properties PROPS = getProperties("MsmCurrency.properties");
 
 	// Instance variables
 	private final Table crncTable;

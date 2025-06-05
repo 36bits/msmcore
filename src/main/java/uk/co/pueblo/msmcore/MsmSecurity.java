@@ -32,7 +32,7 @@ public class MsmSecurity extends MsmInstrument {
 	private static final String SP_TABLE = "SP";
 	private static final int SRC_MANUAL = 5;
 	private static final int SRC_ONLINE = 6;
-	private static final Properties PROPS = openProperties("MsmSecurity.properties");
+	private static final Properties PROPS = getProperties("MsmSecurity.properties");
 
 	// Instance variables
 	private final MsmDb msmDb;
