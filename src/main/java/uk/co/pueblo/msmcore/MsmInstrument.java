@@ -178,7 +178,7 @@ public abstract class MsmInstrument {
 		}
 	}
 
-	static Properties getProperties(String propsFile) {
+	static Properties loadProperties(String propsFile) {
 		// Open properties
 		Properties props = new Properties();
 		try {
@@ -186,7 +186,7 @@ public abstract class MsmInstrument {
 			props.load(propsIs);
 		} catch (IOException e) {
 			LOGGER.debug("Exception occured!", e);
-			LOGGER.fatal("Failed to get properties: {}", e.getMessage());
+			LOGGER.fatal("Failed to load properties: {}", e.getMessage());
 		}
 		return props;
 	}
