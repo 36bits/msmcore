@@ -32,7 +32,7 @@ public class MsmSecurity extends MsmInstrument {
 	private static final String SP_TABLE = "SP";
 	private static final int SRC_MANUAL = 5;
 	private static final int SRC_ONLINE = 6;
-	private static final Properties PROPS = loadProperties("MsmSecurity.properties");
+	private static final Properties PROPS;
 
 	// Instance variables
 	private final MsmDb msmDb;
@@ -41,6 +41,17 @@ public class MsmSecurity extends MsmInstrument {
 	private ArrayList<Map<String, Object>> newSpRows = new ArrayList<>();
 	private int hsp = 0;
 
+	static {
+		Properties props = null;
+		try {
+			props = loadProperties("MsmSecurity.properties");
+		} catch (Exception e) {
+			LOGGER.debug("Exception occured!", e);
+			LOGGER.fatal("Failed to load properties: {}", e.getMessage());
+		}
+		PROPS = props;
+	}	
+	
 	// Constructor
 	public MsmSecurity(MsmDb msmDb) throws IOException, SQLException {
 

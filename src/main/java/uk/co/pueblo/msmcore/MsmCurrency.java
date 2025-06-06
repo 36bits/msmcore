@@ -23,12 +23,23 @@ public class MsmCurrency extends MsmInstrument {
 	static final Logger LOGGER = LogManager.getLogger(MsmCurrency.class);
 	private static final String CRNC_TABLE = "CRNC";
 	private static final String FX_TABLE = "CRNC_EXCHG";
-	private static final Properties PROPS = loadProperties("MsmCurrency.properties");
+	private static final Properties PROPS;
 
 	// Instance variables
 	private final Table crncTable;
 	private final Table fxTable;
 
+	static {
+		Properties props = null;
+		try {
+			props = loadProperties("MsmCurrency.properties");
+		} catch (Exception e) {
+			LOGGER.debug("Exception occured!", e);
+			LOGGER.fatal("Failed to load properties: {}", e.getMessage());
+		}
+		PROPS = props;
+	}	
+	
 	// Constructor
 	public MsmCurrency(MsmDb msmDb) throws IOException {
 

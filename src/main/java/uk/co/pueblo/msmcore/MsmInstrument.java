@@ -178,16 +178,10 @@ public abstract class MsmInstrument {
 		}
 	}
 
-	static Properties loadProperties(String propsFile) {
-		// Open properties
-		Properties props = new Properties();
-		try {
-			InputStream propsIs = MsmInstrument.class.getClassLoader().getResourceAsStream(propsFile);
-			props.load(propsIs);
-		} catch (IOException e) {
-			LOGGER.debug("Exception occured!", e);
-			LOGGER.fatal("Failed to load properties: {}", e.getMessage());
-		}
+	static Properties loadProperties(String propsFile) throws IOException {
+		final Properties props = new Properties();
+		InputStream propsIs = MsmInstrument.class.getClassLoader().getResourceAsStream(propsFile);
+		props.load(propsIs);
 		return props;
 	}
 
