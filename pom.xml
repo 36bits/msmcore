@@ -86,11 +86,11 @@
 						<manifest>
 							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+							<addBuildEnvironmentEntries>true</addBuildEnvironmentEntries>
 						</manifest>
 						<manifestEntries>
 							<Build-Time>${maven.build.timestamp}</Build-Time>
 							<Built-By>${user.name}</Built-By>
-							<Build-Jdk>${java.version}</Build-Jdk>
 						</manifestEntries>
 					</archive>
 				</configuration>
