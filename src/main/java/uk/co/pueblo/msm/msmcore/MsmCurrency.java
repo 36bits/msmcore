@@ -1,4 +1,4 @@
-package uk.co.pueblo.msmcore;
+package uk.co.pueblo.msm.msmcore;
 
 import java.io.IOException;
 import java.util.Collections;

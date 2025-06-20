@@ -1,4 +1,4 @@
-package uk.co.pueblo.msmcore;
+package uk.co.pueblo.msm.msmcore;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -22,7 +22,7 @@ import com.healthmarketscience.jackcess.Row;
 import com.healthmarketscience.jackcess.Table;
 import com.healthmarketscience.jackcess.util.IterableBuilder;
 
-import uk.co.pueblo.msmcore.MsmDb.DhdDataValue;
+import uk.co.pueblo.msm.msmcore.MsmDb.DhdDataValue;
 
 public class MsmSecurity extends MsmInstrument {
 
