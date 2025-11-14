@@ -77,7 +77,6 @@ public class MsmSecurity extends MsmInstrument {
 		while (secIt.hasNext()) {
 			row = secIt.next();
 			if ((secSymbol = (String) row.get("szSymbol")) != null) {
-				msmSymbolsCheck.add(secSymbol);
 				msmSymbols.add(new String[] { secSymbol, msmDb.getCntryCode((int) row.get("hcntry")) });
 			}
 		}

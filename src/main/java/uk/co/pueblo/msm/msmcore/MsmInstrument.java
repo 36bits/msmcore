@@ -23,7 +23,7 @@ public abstract class MsmInstrument {
 	// Constants
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
-	static final int MAX_SYMBOL_SZ = 12; // Money symbol size excluding exchange prefix
+	static final int MAX_SYMBOL_LEN = 12; // MSM symbol length excluding country prefix
 	static final int EXIT_OK = 0;
 	static final int EXIT_WARN = 1;
 	static final int EXIT_ERROR = 2;
@@ -32,7 +32,6 @@ public abstract class MsmInstrument {
 	Map<String, int[]> summary = new HashMap<>();
 	UpdateStatus updateStatus;
 	final List<String[]> msmSymbols = new ArrayList<>();
-	final List<String> msmSymbolsCheck = new ArrayList<>();
 
 	// Quote update status
 	public enum UpdateStatus {
@@ -86,22 +85,7 @@ public abstract class MsmInstrument {
 			}
 		}
 
-		// If symbol does not have an MSM exchange prefix then truncate if required
-		String symbol = outRow.get("xSymbol");
-		if (symbol.length() > MAX_SYMBOL_SZ && !symbol.matches("^\\$?..:.+")) {
-			String newSymbol = symbol.substring(0, MAX_SYMBOL_SZ);
-			LOGGER.info("Truncated symbol {} to {}", symbol, newSymbol);
-			outRow.put("xSymbol", newSymbol);
-			symbol = newSymbol;
-		}
-
-		if (msmSymbolsCheck.contains(symbol)) {
-			emitLogMsgs(symbol, new String[] { "Missing optional quote data", "Applied optional quote data default values" }, missingCols);
-		} else {
-			// Reject if symbol is not in symbols list
-			incSummary(quoteType, UpdateStatus.NOT_FOUND);
-			throw new MsmInstrumentException("Cannot find symbol " + symbol + " in symbols list");
-		}
+		emitLogMsgs(outRow.get("xSymbol"), new String[] { "Missing optional quote data", "Applied optional quote data default values" }, missingCols);
 
 		return outRow;
 	}
@@ -113,6 +97,8 @@ public abstract class MsmInstrument {
 		String columnSet = "column.";
 		int index = 1;
 
+		LOGGER.debug("Input row: {}", inRow);
+		
 		for (int pass = 0; pass < 2; pass++) {
 			if (pass == 1) {
 				columnSet = columnSet + msmRow.get("xType") + '.';
@@ -125,32 +111,38 @@ public abstract class MsmInstrument {
 
 				if (inRow.containsKey(propCol)) {
 					value = inRow.get(propCol);
+					
 					// Add key and value to MSM row
 					while (true) {
 						if (propCol.equals("dtLastUpdate") && value.matches("\\d+")) {
 							// LocalDateTime value from epoch seconds
 							msmRow.put(propCol, Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime());
-						} else if (propCol.equals("dtLastUpdate") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
+						} else if (propCol.equals("dtLastUpdate") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z")) {
 							// LocalDateTime value from UTC string
 							msmRow.put(propCol, Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime());
 						} else if (propCol.equals("dt") && value.matches("\\d+")) {
 							// LocalDateTime value from epoch seconds and truncated to days
 							msmRow.put(propCol, Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
-						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")) {
+						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z")) {
 							// LocalDateTime value from UTC string and truncated to days
 							msmRow.put(propCol, Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
-						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}$")) {
+						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}")) {
 							// LocalDateTime value from CSV date-only string
 							msmRow.put(propCol, LocalDateTime.parse(value + "T00:00:00"));
-						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+\\.?\\d+")) {
-							// Double values
+						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+(\\.\\d+|\\.\\d+E-?\\d+)?")) {
+							// Double values possibly in scientific notation
 							msmRow.put(propCol, Double.parseDouble(value));
+						} else if (propCol.equals("xSymbol") && value.length() > MAX_SYMBOL_LEN && !value.matches("^\\$?..:.+")) {
+							// If symbol does not have an MSM country prefix then truncate if required
+							String newValue = value.substring(0, MAX_SYMBOL_LEN);
+							LOGGER.info("Truncated symbol {} to {}", value, newValue);
+							msmRow.put(propCol, newValue);
 						} else if (propCol.startsWith("x")) {
 							// msmquote internal values
 							msmRow.put(propCol, value);
-						} else if (value.matches("-?\\d+")) {
-							// Long values
-							msmRow.put(propCol, Long.parseLong(value));
+						} else if (value.matches("-?\\d+(\\.0+|\\.\\d+E\\d+)?")) {
+							// Long values possibly with trailing zeros after decimal point or in scientific notation
+							msmRow.put(propCol, (long) Double.parseDouble(value));
 						} else {
 							// Try again with the default value if there is one
 							invalidCols[0].add(propCol + "=" + value);

@@ -1,12 +1,13 @@
 package uk.co.pueblo.msm.msmcore;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -59,19 +60,18 @@ public class MsmCurrency extends MsmInstrument {
 		rowPattern.put("fHidden", false);
 		IndexCursor cursor = CursorBuilder.createCursor(crncTable.getPrimaryKeyIndex());
 		crncIt = new IterableBuilder(cursor).setMatchPattern(rowPattern).forward().iterator();
+		List<String> isoCodes = new ArrayList<>();
 		while (crncIt.hasNext()) {
 			row = crncIt.next();
 			if ((int) row.get("hcrnc") == defHcrnc) {
 				defIsoCode = (String) row.get("szIsoCode");
 				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
-			} else {
-				msmSymbolsCheck.add(row.get("szIsoCode").toString());
+			} else {				
+				isoCodes.add(row.get("szIsoCode").toString());
 			}
 		}
-		for (int i = 0; i < msmSymbolsCheck.size(); i++) {
-			String symbol = defIsoCode + msmSymbolsCheck.get(i) + "=X"; // MSM currency pair pseudo-symbol is FOOBAR=X
-			msmSymbolsCheck.set(i, symbol);
-			msmSymbols.add(new String[] { symbol });
+		for (String isoCode : isoCodes) {
+			msmSymbols.add(new String[] { defIsoCode + isoCode, "XX" } );		
 		}
 	}
 
@@ -132,7 +132,7 @@ public class MsmCurrency extends MsmInstrument {
 			}
 		}
 		incSummary(quoteType, UpdateStatus.NOT_FOUND);
-		throw new MsmInstrumentException("Cannot find previous exchange rate");
+		throw new MsmInstrumentException("Cannot find previous exchange rate for symbol " + symbol);
 	}
 
 	/**
