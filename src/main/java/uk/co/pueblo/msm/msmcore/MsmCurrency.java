@@ -82,12 +82,11 @@ public class MsmCurrency extends MsmInstrument {
 	 * @throws IOException
 	 * @throws MsmInstrumentException
 	 */
-	public void update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
+	public void update(Map<String, Object> sourceRow) throws IOException, MsmInstrumentException {
 		
 		updateStatus = UpdateStatus.OK;
 
-		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS)); // validate incoming row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS)); // now build MSM row
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, PROPS)); // build MSM row
 
 		String symbol = msmRow.get("xSymbol").toString();
 		LOGGER.info("Updating exchange rate for symbol {}", symbol);

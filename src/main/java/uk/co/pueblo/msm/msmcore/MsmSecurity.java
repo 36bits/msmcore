@@ -90,15 +90,14 @@ public class MsmSecurity extends MsmInstrument {
 	 * @throws IOException
 	 * @throws MsmInstrumentException
 	 */
-	public void update(Map<String, String> sourceRow) throws IOException, MsmInstrumentException {
+	public void update(Map<String, Object> sourceRow) throws IOException, MsmInstrumentException {
 		
 		updateStatus = UpdateStatus.OK;
 
-		Map<String, String> validatedRow = new HashMap<>(validateQuoteRow(sourceRow, PROPS)); // validate incoming row
-		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(validatedRow, PROPS)); // now build MSM row
-
+		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, PROPS)); // build MSM row
+		
 		String symbol = msmRow.get("xSymbol").toString();
-		String quoteType = validatedRow.get("xType").toString();
+		String quoteType = msmRow.get("xType").toString();
 		LOGGER.info("Updating quote data for symbol {}, quote type={}", symbol, quoteType);
 
 		// Find symbol in SEC table

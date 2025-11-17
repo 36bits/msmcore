@@ -23,7 +23,8 @@ public abstract class MsmInstrument {
 	// Constants
 	static final Logger LOGGER = LogManager.getLogger(MsmInstrument.class);
 	static final ZoneId SYS_ZONE_ID = ZoneId.systemDefault();
-	static final int MAX_SYMBOL_LEN = 12; // MSM symbol length excluding country prefix
+	static final int MAX_SYMBOL_LEN = 12; // length of MSM symbol excluding country prefix
+	static final int DATE_LEN = 10; // length of YYYY-MM-DD
 	static final int EXIT_OK = 0;
 	static final int EXIT_WARN = 1;
 	static final int EXIT_ERROR = 2;
@@ -35,7 +36,8 @@ public abstract class MsmInstrument {
 
 	// Quote update status
 	public enum UpdateStatus {
-		OK("updated OK=", EXIT_OK), MISSING_OPTIONAL("missing optional data=", EXIT_WARN), MISSING_REQUIRED("missing required data=", EXIT_ERROR), NOT_FOUND("not found=", EXIT_ERROR),	NO_CHANGE("no change=", EXIT_OK), STALE("stale=", EXIT_WARN), NEW_STALE("new stale=", EXIT_WARN);
+		OK("updated OK=", EXIT_OK), MISSING_OPTIONAL("missing optional data=", EXIT_WARN), MISSING_REQUIRED("missing required data=", EXIT_ERROR), INVALID_OPTIONAL("invalid optional data=", EXIT_WARN),
+		INVALID_REQUIRED("invalid required data=", EXIT_ERROR), NOT_FOUND("not found=", EXIT_ERROR), NO_CHANGE("no change=", EXIT_OK), STALE("stale=", EXIT_WARN), NEW_STALE("new stale=", EXIT_WARN);
 
 		public final String msg;
 		public final int exitCode;
@@ -46,128 +48,109 @@ public abstract class MsmInstrument {
 		}
 	}
 
-	abstract void update(Map<String, String> inRow) throws IOException, MsmInstrumentException;
+	abstract void update(Map<String, Object> inRow) throws IOException, MsmInstrumentException;
 
-	Map<String, String> validateQuoteRow(Map<String, String> inRow, Properties props) throws MsmInstrumentException {
-		Map<String, String> outRow = new HashMap<>();
-		String prop;
-
-		// Validate required values
-		String columnSet = "column.";
-		int index = 1;
-		while ((prop = props.getProperty(columnSet + index++)) != null) {
-			if (inRow.containsKey(prop)) {
-				outRow.put(prop, inRow.get(prop));
-			} else {
-				incSummary(inRow.get("xType"), UpdateStatus.MISSING_REQUIRED); // TODO xType might be null
-				throw new MsmInstrumentException("Missing required quote data for symbol " + inRow.get("xSymbol") + ": " + prop); // TODO xSymbol might be null
-			}
-		}
-
-		// Validate optional values
-		String quoteType = inRow.get("xType");
-		columnSet = columnSet + quoteType + '.';
-		index = 1;
-		StringJoiner missingCols[] = { new StringJoiner(", "), new StringJoiner(", ") }; // optional, optional defaults
-		while ((prop = props.getProperty(columnSet + index++)) != null) {
-			String propArray[] = prop.split(",");
-			String column = propArray[0];
-			if (inRow.containsKey(column)) {
-				outRow.put(column, inRow.get(column));
-			} else {
-				updateStatus = UpdateStatus.MISSING_OPTIONAL;
-				missingCols[0].add(column);
-				// Add default value to row
-				if (propArray.length == 2) {
-					outRow.put(column, propArray[1]);
-					missingCols[1].add(column + "=" + propArray[1]);
-				}
-			}
-		}
-
-		emitLogMsgs(outRow.get("xSymbol"), new String[] { "Missing optional quote data", "Applied optional quote data default values" }, missingCols);
-
-		return outRow;
-	}
-
-	Map<String, Object> buildMsmRow(Map<String, String> inRow, Properties props) {
-		Map<String, Object> msmRow = new HashMap<>();
-		String prop;
-		StringJoiner invalidCols[] = { new StringJoiner(", "), new StringJoiner(", ") }; // invalid quota data, default value
-		String columnSet = "column.";
-		int index = 1;
+	Map<String, Object> buildMsmRow(Map<String, Object> inRow, Properties props) throws MsmInstrumentException {
 
 		LOGGER.debug("Input row: {}", inRow);
-		
-		for (int pass = 0; pass < 2; pass++) {
-			if (pass == 1) {
-				columnSet = columnSet + msmRow.get("xType") + '.';
-				index = 1;
-			}
-			while ((prop = props.getProperty(columnSet + index++)) != null) {
-				String propArray[] = prop.split(",");
-				String propCol = propArray[0];
-				String value;
 
-				if (inRow.containsKey(propCol)) {
-					value = inRow.get(propCol);
-					
-					// Add key and value to MSM row
-					while (true) {
-						if (propCol.equals("dtLastUpdate") && value.matches("\\d+")) {
-							// LocalDateTime value from epoch seconds
-							msmRow.put(propCol, Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime());
-						} else if (propCol.equals("dtLastUpdate") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z")) {
-							// LocalDateTime value from UTC string
-							msmRow.put(propCol, Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime());
-						} else if (propCol.equals("dt") && value.matches("\\d+")) {
-							// LocalDateTime value from epoch seconds and truncated to days
-							msmRow.put(propCol, Instant.ofEpochSecond(Long.parseLong(value)).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
-						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z")) {
-							// LocalDateTime value from UTC string and truncated to days
-							msmRow.put(propCol, Instant.parse(value).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS));
-						} else if (propCol.equals("dt") && value.matches("^\\d{4}\\-\\d{2}\\-\\d{2}")) {
-							// LocalDateTime value from CSV date-only string
-							msmRow.put(propCol, LocalDateTime.parse(value + "T00:00:00"));
-						} else if ((propCol.startsWith("d") || propCol.equals("rate")) && value.matches("-?\\d+(\\.\\d+|\\.\\d+E-?\\d+)?")) {
-							// Double values possibly in scientific notation
-							msmRow.put(propCol, Double.parseDouble(value));
-						} else if (propCol.equals("xSymbol") && value.length() > MAX_SYMBOL_LEN && !value.matches("^\\$?..:.+")) {
-							// If symbol does not have an MSM country prefix then truncate if required
-							String newValue = value.substring(0, MAX_SYMBOL_LEN);
-							LOGGER.info("Truncated symbol {} to {}", value, newValue);
-							msmRow.put(propCol, newValue);
-						} else if (propCol.startsWith("x")) {
-							// msmquote internal values
-							msmRow.put(propCol, value);
-						} else if (value.matches("-?\\d+(\\.0+|\\.\\d+E\\d+)?")) {
-							// Long values possibly with trailing zeros after decimal point or in scientific notation
-							msmRow.put(propCol, (long) Double.parseDouble(value));
-						} else {
-							// Try again with the default value if there is one
-							invalidCols[0].add(propCol + "=" + value);
-							if (propArray.length == 2) {
-								value = propArray[1];
-								invalidCols[1].add(propCol);
-								continue;
-							}
-						}
-						break;
-					}
-				}
+		Map<String, Object> msmRow = new HashMap<>();
+		String prop;
+		Object msmValue;
+		String columnSet = "column.";
+		int index = 1;
+
+		// Add required values to row
+		while ((prop = props.getProperty(columnSet + index++)) != null) {
+			if (!inRow.containsKey(prop)) {
+				// TODO xType or xSymbol might be null
+				incSummary(inRow.get("xType").toString(), UpdateStatus.MISSING_REQUIRED);
+				throw new MsmInstrumentException("Missing required quote data for symbol " + inRow.get("xSymbol") + ": " + prop);
+			}
+			Object inValue = inRow.get(prop);
+			if ((msmValue = createMsmColumnValue(prop, inValue)) == null) {
+				// TODO xType or xSymbol might be null
+				incSummary(inRow.get("xType").toString(), UpdateStatus.INVALID_REQUIRED);
+				throw new MsmInstrumentException("Invalid required quote data for symbol " + inRow.get("xSymbol") + ": " + prop + "=" + inValue);
+			} else {
+				msmRow.put(prop, msmValue);
 			}
 		}
-		emitLogMsgs(msmRow.get("xSymbol").toString(), new String[] { "Invalid quote data", "Default values applied" }, invalidCols);
+
+		// Add optional values to row
+		String quoteType = inRow.get("xType").toString();
+		columnSet = columnSet + quoteType + '.';
+		index = 1;
+		StringJoiner badColumns[] = { new StringJoiner(", "), new StringJoiner(", "), new StringJoiner(", ") }; // missing, invalid, defaults
+		while ((prop = props.getProperty(columnSet + index++)) != null) {
+			String propArray[] = prop.split(",");
+			if (!inRow.containsKey(propArray[0])) {
+				updateStatus = UpdateStatus.MISSING_OPTIONAL;
+				badColumns[0].add(propArray[0]);
+			} else if ((msmValue = createMsmColumnValue(propArray[0], inRow.get(propArray[0]))) == null) {
+				updateStatus = UpdateStatus.INVALID_OPTIONAL;
+				badColumns[1].add(propArray[0] + "=" + inRow.get(propArray[0]));
+			} else {
+				msmRow.put(prop, msmValue);
+				continue;
+			}
+			// Add default value to row
+			if (propArray.length == 2) {
+				msmRow.put(propArray[0], propArray[1]);
+				badColumns[2].add(propArray[0] + "=" + propArray[1]);
+			}
+		}
+
+		// Emit log messages
+		String[] msgPrefix = { "Missing optional quote data", "Invalid optional quote data", "Applied optional quote data default values" };
+		for (int i = 0; i < msgPrefix.length; i++) {
+			String columns = badColumns[i].toString();
+			if (!columns.isEmpty()) {
+				LOGGER.warn("{} for symbol {}: {}", msgPrefix[i], inRow.get("xSymbol"), columns);
+			}
+		}
+
 		return msmRow;
 	}
 
-	private void emitLogMsgs(String symbol, String msgPrefix[], StringJoiner msgCols[]) {
-		for (int i = 0; i < msgPrefix.length; i++) {
-			String columns = msgCols[i].toString();
-			if (!columns.isEmpty()) {
-				LOGGER.warn("{} for symbol {}: {}", msgPrefix[i], symbol, columns);
+	static private Object createMsmColumnValue(String column, Object object) {
+		try {
+			if (object instanceof String) {
+				// String objects requiring processing
+				if (column.equals("dtLastUpdate")) {
+					// LocalDateTime value from UTC string
+					return Instant.parse(object.toString()).atZone(SYS_ZONE_ID).toLocalDateTime();
+				} else if (column.equals("dt") && object.toString().length() == DATE_LEN && object.toString().matches("\\d{4}\\-\\d{2}\\-\\d{2}")) {
+					// LocalDateTime value from CSV date-only string
+					return LocalDateTime.parse(object.toString() + "T00:00:00");
+				} else if (column.equals("dt")) {
+					// LocalDateTime value from UTC string and truncated to days
+					return Instant.parse(object.toString()).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS);
+				} else if (column.equals("xSymbol") && object.toString().length() > MAX_SYMBOL_LEN && !object.toString().matches("\\$?..:.+")) {
+					// If symbol does not have an MSM country prefix then truncate if required
+					String newSymbol = object.toString().substring(0, MAX_SYMBOL_LEN);
+					LOGGER.info("Truncated symbol {} to {}", object, newSymbol);
+					return newSymbol;
+				} else if (column.charAt(0) == 'x') {
+					// msmquote internal values
+					return object.toString();
+				}
+			} else {
+				// Non-string objects requiring processing
+				if (column.equals("dtLastUpdate")) {
+					// LocalDateTime value from epoch seconds
+					return Instant.ofEpochSecond(((Double) object).longValue()).atZone(SYS_ZONE_ID).toLocalDateTime();
+				} else if (column.equals("dt")) {
+					// LocalDateTime value from epoch seconds and truncated to days
+					return Instant.ofEpochSecond(((Double) object).longValue()).atZone(SYS_ZONE_ID).toLocalDateTime().truncatedTo(ChronoUnit.DAYS);
+				}
 			}
+			// Everything else
+			return (Double) object;
+		} catch (Exception e) {
+			// Do nothing
 		}
+		return null;
 	}
 
 	static Properties loadProperties(String propsFile) throws IOException {
@@ -192,7 +175,7 @@ public abstract class MsmInstrument {
 	public UpdateStatus printSummary() {
 		UpdateStatus finalStatus = UpdateStatus.OK;
 		int maxExitCode = UpdateStatus.OK.exitCode;
-		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL, UpdateStatus.NEW_STALE);
+		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL, UpdateStatus.INVALID_OPTIONAL, UpdateStatus.NEW_STALE);
 		for (Map.Entry<String, int[]> entry : summary.entrySet()) {
 			StringJoiner msgSj = new StringJoiner(", ");
 			int total = 0;
