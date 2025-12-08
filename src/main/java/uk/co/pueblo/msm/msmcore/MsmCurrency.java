@@ -44,35 +44,12 @@ public class MsmCurrency extends MsmInstrument {
 	// Constructor
 	public MsmCurrency(MsmDb msmDb) throws IOException {
 
+		this.msmDb = msmDb;
 		Database db = msmDb.getDb();
-		int defHcrnc = msmDb.getDhdInt("hcrncDef"); // get the base currency
 
 		// Open the currency tables
 		crncTable = db.getTable(CRNC_TABLE);
 		fxTable = db.getTable(FX_TABLE);
-
-		// Build list of currency pairs
-		Map<String, Object> row = null;
-		Map<String, Object> rowPattern = new HashMap<>();
-		Iterator<Row> crncIt;
-		String defIsoCode = null;
-		rowPattern.put("fOnline", true); // online update flag set
-		rowPattern.put("fHidden", false);
-		IndexCursor cursor = CursorBuilder.createCursor(crncTable.getPrimaryKeyIndex());
-		crncIt = new IterableBuilder(cursor).setMatchPattern(rowPattern).forward().iterator();
-		List<String> isoCodes = new ArrayList<>();
-		while (crncIt.hasNext()) {
-			row = crncIt.next();
-			if ((int) row.get("hcrnc") == defHcrnc) {
-				defIsoCode = (String) row.get("szIsoCode");
-				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
-			} else {				
-				isoCodes.add(row.get("szIsoCode").toString());
-			}
-		}
-		for (String isoCode : isoCodes) {
-			msmSymbols.add(new String[] { defIsoCode + isoCode, "XX" } );		
-		}
 	}
 
 	/**
@@ -132,6 +109,39 @@ public class MsmCurrency extends MsmInstrument {
 		}
 		incSummary(quoteType, UpdateStatus.NOT_FOUND);
 		throw new MsmInstrumentException("Cannot find previous exchange rate for symbol " + symbol);
+	}	
+
+	/**
+	 * Builds the list of currency-pair symbols.
+	 *
+	 * @return the list currency-pair symbols
+	 * @throws IOException
+	 */
+	public List<String[]> getSymbols() throws IOException {
+		List<String[]> cpSymbols = new ArrayList<>();
+		int defHcrnc = msmDb.getDhdInt("hcrncDef");
+		Map<String, Object> row = null;
+		Map<String, Object> rowPattern = new HashMap<>();
+		Iterator<Row> crncIt;
+		String defIsoCode = null;
+		rowPattern.put("fOnline", true); // online update flag set
+		rowPattern.put("fHidden", false);
+		IndexCursor cursor = CursorBuilder.createCursor(crncTable.getPrimaryKeyIndex());
+		crncIt = new IterableBuilder(cursor).setMatchPattern(rowPattern).forward().iterator();
+		List<String> isoCodes = new ArrayList<>();
+		while (crncIt.hasNext()) {
+			row = crncIt.next();
+			if ((int) row.get("hcrnc") == defHcrnc) {
+				defIsoCode = (String) row.get("szIsoCode");
+				LOGGER.info("Base currency is {}, hcrnc={}", defIsoCode, defHcrnc);
+			} else {
+				isoCodes.add(row.get("szIsoCode").toString());
+			}
+		}
+		for (String isoCode : isoCodes) {
+			cpSymbols.add(new String[] { defIsoCode + isoCode, "XX" });
+		}
+		return cpSymbols;
 	}
 
 	/**

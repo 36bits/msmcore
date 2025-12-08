@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -30,9 +29,9 @@ public abstract class MsmInstrument {
 	static final int EXIT_ERROR = 2;
 
 	// Instance variables
+	MsmDb msmDb;
 	Map<String, int[]> summary = new HashMap<>();
 	UpdateStatus updateStatus;
-	final List<String[]> msmSymbols = new ArrayList<>();
 
 	// Quote update status
 	public enum UpdateStatus {
@@ -49,10 +48,12 @@ public abstract class MsmInstrument {
 	}
 
 	abstract void update(Map<String, Object> inRow) throws IOException, MsmInstrumentException;
+	
+	abstract List<String[]> getSymbols() throws IOException;
 
 	Map<String, Object> buildMsmRow(Map<String, Object> inRow, Properties props) throws MsmInstrumentException {
 
-		LOGGER.debug("Input row: {}", inRow);
+		LOGGER.debug("Build MSM row input: {}", inRow);
 
 		Map<String, Object> msmRow = new HashMap<>();
 		String prop;
@@ -91,7 +92,7 @@ public abstract class MsmInstrument {
 				updateStatus = UpdateStatus.INVALID_OPTIONAL;
 				badColumns[1].add(propArray[0] + "=" + inRow.get(propArray[0]));
 			} else {
-				msmRow.put(prop, msmValue);
+				msmRow.put(propArray[0], msmValue);
 				continue;
 			}
 			// Add default value to row
@@ -109,7 +110,8 @@ public abstract class MsmInstrument {
 				LOGGER.warn("{} for symbol {}: {}", msgPrefix[i], inRow.get("xSymbol"), columns);
 			}
 		}
-
+		
+		LOGGER.debug("Build MSM row output: {}",msmRow);
 		return msmRow;
 	}
 
@@ -158,10 +160,6 @@ public abstract class MsmInstrument {
 		InputStream propsIs = MsmInstrument.class.getClassLoader().getResourceAsStream(propsFile);
 		props.load(propsIs);
 		return props;
-	}
-
-	public List<String[]> getSymbols() {
-		return msmSymbols;
 	}
 
 	void incSummary(String quoteType, UpdateStatus updateStatus) {

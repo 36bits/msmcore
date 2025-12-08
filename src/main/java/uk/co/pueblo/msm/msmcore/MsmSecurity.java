@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -35,7 +36,6 @@ public class MsmSecurity extends MsmInstrument {
 	private static final Properties PROPS;
 
 	// Instance variables
-	private final MsmDb msmDb;
 	private final Table secTable;
 	private final Table spTable;
 	private ArrayList<Map<String, Object>> newSpRows = new ArrayList<>();
@@ -65,21 +65,6 @@ public class MsmSecurity extends MsmInstrument {
 		// Get the next hsp (SP table primary key)
 		hsp = msmDb.getDhdDataInt(DhdDataValue.SP_NEXT_PK);
 		LOGGER.debug("Next hsp={}", hsp);
-
-		// Build lists of security symbols and corresponding country codes
-		Map<String, Object> row = null;
-		Map<String, Object> rowPattern = new HashMap<>();
-		Iterator<Row> secIt;
-		rowPattern.put("fOLQuotes", true);
-		IndexCursor secCursor = CursorBuilder.createCursor(secTable.getPrimaryKeyIndex());
-		secIt = new IterableBuilder(secCursor).setMatchPattern(rowPattern).forward().iterator();
-		String secSymbol;
-		while (secIt.hasNext()) {
-			row = secIt.next();
-			if ((secSymbol = (String) row.get("szSymbol")) != null) {
-				msmSymbols.add(new String[] { secSymbol, msmDb.getCntryCode((int) row.get("hcntry")) });
-			}
-		}
 	}
 
 	/**
@@ -236,6 +221,36 @@ public class MsmSecurity extends MsmInstrument {
 		return;
 	}
 
+	/**
+	 * Builds the list of security symbols, corresponding country codes and security
+	 * comments from the SEC table.
+	 *
+	 * @return the list of security symbols, corresponding country codes and
+	 *         security comments
+	 * @throws IOException
+	 */
+	public List<String[]> getSymbols() throws IOException {
+		List<String[]> secSymbols = new ArrayList<>();
+		Map<String, Object> row = null;
+		Map<String, Object> rowPattern = new HashMap<>();
+		Iterator<Row> secIt;
+		rowPattern.put("fOLQuotes", true); // online update flag set
+		IndexCursor secCursor = CursorBuilder.createCursor(secTable.getPrimaryKeyIndex());
+		secIt = new IterableBuilder(secCursor).setMatchPattern(rowPattern).forward().iterator();
+		while (secIt.hasNext()) {
+			row = secIt.next();
+			Object secSymbol;
+			if ((secSymbol = row.get("szSymbol")) != null) {
+				String[] secCols = { secSymbol.toString(), msmDb.getCntryCode((int) row.get("hcntry")), "" };
+				Object secComment;
+				if ((secComment = row.get("mComment")) != null)
+					secCols[2] = secComment.toString();
+				secSymbols.add(secCols);
+			}
+		}
+		return secSymbols;
+	}
+
 	public void addNewRows() throws IOException, SQLException {
 		if (!newSpRows.isEmpty()) {
 			spTable.addRowsFromMaps(newSpRows);
@@ -243,5 +258,5 @@ public class MsmSecurity extends MsmInstrument {
 			msmDb.setDhdDataInt(DhdDataValue.SP_NEXT_PK, hsp);
 		}
 		return;
-	}
+	}	
 }
