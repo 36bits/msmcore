@@ -66,7 +66,7 @@ public class MsmCurrency extends MsmInstrument {
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, PROPS)); // build MSM row
 
 		String symbol = msmRow.get("xSymbol").toString();
-		LOGGER.info("Updating exchange rate for symbol {}", symbol);
+		LOGGER.info("Updating exchange rate for currency pair {}", symbol);
 
 		// Get hcrncs of currency pair
 		int[] hcrnc = { 0, 0 };
@@ -88,33 +88,34 @@ public class MsmCurrency extends MsmInstrument {
 				fxRow = fxCursor.getCurrentRow();
 				oldRate = (double) fxRow.get("rate");
 				if (i == 1) {
-					// Reversed rate
-					newRate = 1 / newRate;
-					msmRow.put("rate", newRate);
+					// Inverse rate
+					oldRate = 1 / oldRate;
+					msmRow.put("rate", 1 / newRate);
 				}
-				LOGGER.info("Found exchange rate: from hcrnc={}, to hcrnc={}", hcrnc[i], hcrnc[(i + 1) % 2]);
+				LOGGER.debug("Found previous exchange rate: from hcrnc={}, to hcrnc={}", hcrnc[i], hcrnc[(i + 1) % 2]);
+				LOGGER.info("Found previous exchange rate for currency pair {}: previous rate={}", symbol, oldRate);
 				if (oldRate != newRate) {
 					// Merge quote row into FX row and write to FX table
 					fxRow.putAll(msmRow); // TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
 					incSummary(quoteType, updateStatus);
-					LOGGER.info("Updated exchange rate: new rate={}, previous rate={}", newRate, oldRate);
+					LOGGER.info("Updated exchange rate for currency pair {}: new rate={}", symbol, newRate);
 					return;
 				} else {
 					incSummary(quoteType, UpdateStatus.NO_CHANGE);
-					LOGGER.info("Skipped update for symbol {}, rate has not changed: new rate={}, previous rate={}", symbol, newRate, oldRate);
+					LOGGER.info("Skipped exchange rate update for currency pair {}, rate has not changed: new rate={}", symbol, newRate);
 					return;
 				}
 			}
 		}
 		incSummary(quoteType, UpdateStatus.NOT_FOUND);
-		throw new MsmInstrumentException("Cannot find previous exchange rate for symbol " + symbol);
+		throw new MsmInstrumentException("Cannot find previous exchange rate for currency pair " + symbol);
 	}	
 
 	/**
-	 * Builds the list of currency-pair symbols.
+	 * Builds the list of currency pair symbols.
 	 *
-	 * @return the list currency-pair symbols
+	 * @return the list currency pair symbols
 	 * @throws IOException
 	 */
 	public List<String[]> getSymbols() throws IOException {
