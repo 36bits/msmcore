@@ -15,6 +15,7 @@ import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.ThreadContext;
 
 import com.healthmarketscience.jackcess.CursorBuilder;
 import com.healthmarketscience.jackcess.Database;
@@ -89,7 +90,8 @@ public class MsmSecurity extends MsmInstrument {
 			Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, PROPS)); // build MSM row
 			
 			String quoteType = msmRow.get("xType").toString();
-			LOGGER.info("Updating quote data for symbol {}, quote type={}", symbol, quoteType);
+			ThreadContext.put(TC_SYMBOL, symbol);
+			LOGGER.info("Updating quote data, quote type={}", quoteType);
 			
 			// Find symbol in SEC table
 			int hsec = -1;
@@ -98,10 +100,10 @@ public class MsmSecurity extends MsmInstrument {
 			if (secCursor.findFirstRow(Collections.singletonMap("szSymbol", symbol))) {
 				secRow = secCursor.getCurrentRow();
 				hsec = (int) secRow.get("hsec");
-				LOGGER.info("Found symbol {} in SEC table: sct={}, hsec={}", symbol, secRow.get("sct"), hsec);
+				LOGGER.info("Found symbol in SEC table: sct={}, hsec={}", secRow.get("sct"), hsec);
 			} else {
 				incSummary(quoteType, UpdateStatus.NOT_FOUND);
-				throw new MsmInstrumentException("Cannot find symbol " + symbol + " in SEC table");
+				throw new MsmInstrumentException("Cannot find symbol in SEC table");
 			}
 
 			// Update SEC table
@@ -113,14 +115,14 @@ public class MsmSecurity extends MsmInstrument {
 					// Merge quote row into SEC row and write to SEC table
 					secRow.putAll(msmRow); // TODO Should secRow be sanitised first?
 					secCursor.updateCurrentRowFromMap(secRow);
-					LOGGER.info("Updated SEC table for symbol {}", symbol);
+					LOGGER.info("Updated SEC table");
 				} else if ((quoteAgeDays = ChronoUnit.DAYS.between(quoteTime, LocalDateTime.now())) > Long.parseLong(PROPS.getProperty("quote.staledays"))) {
 					// Quote data is stale
 					updateStatus = UpdateStatus.STALE;
 				} else {
 					// Skip update
 					incSummary(quoteType, UpdateStatus.NO_CHANGE);
-					LOGGER.info("Skipped update for symbol {}, new quote has same timestamp as previous quote: timestamp={}", symbol, quoteTime);
+					LOGGER.info("Skipped update, new quote has same timestamp as previous quote: timestamp={}", quoteTime);
 					continue;
 				}
 			} else {
@@ -185,10 +187,10 @@ public class MsmSecurity extends MsmInstrument {
 							if (updateStatus == UpdateStatus.STALE) {
 								if ((double) spRow.get("dChange") == 0) {
 									incSummary(quoteType, updateStatus);
-									LOGGER.warn("Skipped update for symbol {}, received stale quote data: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
+									LOGGER.warn("Skipped update, received stale quote data: timestamp={}, age days={}", quoteTime, quoteAgeDays);
 									continue nextSymbol;
 								} else {
-									LOGGER.warn("Received new stale quote data for symbol {}, setting change value in SP table to zero: timestamp={}, age days={}", symbol, quoteTime, quoteAgeDays);
+									LOGGER.warn("Received new stale quote data, setting change value in SP table to zero: timestamp={}, age days={}", quoteTime, quoteAgeDays);
 									msmRow.put("dChange", 0);
 									updateStatus = UpdateStatus.NEW_STALE;
 								}
@@ -197,7 +199,7 @@ public class MsmSecurity extends MsmInstrument {
 							spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 							spCursor.updateCurrentRowFromMap(spRow);
 							incSummary(quoteType, updateStatus);
-							LOGGER.info("Updated previous quote for symbol {} in SP table: new price={}, timestamp={}", symbol, spRow.get("dPrice"), quoteTime);
+							LOGGER.info("Updated previous quote in SP table: new price={}, timestamp={}", spRow.get("dPrice"), quoteTime);
 							continue nextSymbol;
 						}
 						break;
@@ -212,9 +214,9 @@ public class MsmSecurity extends MsmInstrument {
 			}
 
 			if (highestSpRow.isEmpty()) {
-				LOGGER.info("Cannot find quote for symbol {} in SP table with timestamp earlier than new quote timestamp", symbol);
+				LOGGER.info("Cannot find quote in SP table with timestamp earlier than new quote timestamp");
 			} else {
-				LOGGER.info("Found previous quote for symbol {} in SP table: price={}, hsp={}, timestamp={}", symbol, highestSpRow.get("dPrice"), highestSpRow.get("hsp"), highestSpRow.get("dt"));
+				LOGGER.info("Found previous quote in SP table: price={}, hsp={}, timestamp={}", highestSpRow.get("dPrice"), highestSpRow.get("hsp"), highestSpRow.get("dt"));
 			}
 
 			// Add quote row to SP row append list
@@ -223,7 +225,7 @@ public class MsmSecurity extends MsmInstrument {
 			spRow.putAll(msmRow); // TODO Should spRow be sanitised first?
 			newSpRows.add(spRow);
 			incSummary(quoteType, updateStatus);
-			LOGGER.info("Added new quote for symbol {} to SP table append list: price={}, hsp={}, timestamp={}", symbol, spRow.get("dPrice"), hsp++, quoteTime);
+			LOGGER.info("Added new quote to SP table append list: price={}, hsp={}, timestamp={}", spRow.get("dPrice"), hsp++, quoteTime);
 		}
 		return;
 	}
@@ -259,6 +261,7 @@ public class MsmSecurity extends MsmInstrument {
 	}
 
 	public void addNewRows() throws IOException, SQLException {
+		ThreadContext.remove(TC_SYMBOL);
 		if (!newSpRows.isEmpty()) {
 			spTable.addRowsFromMaps(newSpRows);
 			LOGGER.info("Added {} new {} to SP table from SP table append list, total SP table rows={}", newSpRows.size(), newSpRows.size() == 1 ? "quote" : "quotes", spTable.getRowCount());

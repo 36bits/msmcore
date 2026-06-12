@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.ThreadContext;
 
 import com.healthmarketscience.jackcess.CursorBuilder;
 import com.healthmarketscience.jackcess.Database;
@@ -66,7 +67,8 @@ public class MsmCurrency extends MsmInstrument {
 		Map<String, Object> msmRow = new HashMap<>(buildMsmRow(sourceRow, PROPS)); // build MSM row
 
 		String symbol = msmRow.get("xSymbol").toString();
-		LOGGER.info("Updating exchange rate for currency pair {}", symbol);
+		ThreadContext.put(TC_SYMBOL, symbol);
+		LOGGER.info("Updating exchange rate");
 
 		// Get hcrncs of currency pair
 		int[] hcrnc = { 0, 0 };
@@ -93,23 +95,23 @@ public class MsmCurrency extends MsmInstrument {
 					msmRow.put("rate", 1 / newRate);
 				}
 				LOGGER.debug("Found previous exchange rate: from hcrnc={}, to hcrnc={}", hcrnc[i], hcrnc[(i + 1) % 2]);
-				LOGGER.info("Found previous exchange rate for currency pair {}: previous rate={}", symbol, oldRate);
+				LOGGER.info("Found previous exchange rate: previous rate={}", oldRate);
 				if (oldRate != newRate) {
 					// Merge quote row into FX row and write to FX table
 					fxRow.putAll(msmRow); // TODO Should fxRow be sanitised first?
 					fxCursor.updateCurrentRowFromMap(fxRow);
 					incSummary(quoteType, updateStatus);
-					LOGGER.info("Updated exchange rate for currency pair {}: new rate={}", symbol, newRate);
+					LOGGER.info("Updated exchange rate: new rate={}", newRate);
 					return;
 				} else {
 					incSummary(quoteType, UpdateStatus.NO_CHANGE);
-					LOGGER.info("Skipped exchange rate update for currency pair {}, rate has not changed: new rate={}", symbol, newRate);
+					LOGGER.info("Skipped exchange rate update, rate has not changed: new rate={}", newRate);
 					return;
 				}
 			}
 		}
 		incSummary(quoteType, UpdateStatus.NOT_FOUND);
-		throw new MsmInstrumentException("Cannot find previous exchange rate for currency pair " + symbol);
+		throw new MsmInstrumentException("Cannot find previous exchange rate");
 	}	
 
 	/**

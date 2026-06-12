@@ -16,6 +16,7 @@ import java.util.StringJoiner;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.ThreadContext;
 
 public abstract class MsmInstrument {
 
@@ -27,6 +28,7 @@ public abstract class MsmInstrument {
 	static final int EXIT_OK = 0;
 	static final int EXIT_WARN = 1;
 	static final int EXIT_ERROR = 2;
+	static final String TC_SYMBOL = "symbol";
 
 	// Instance variables
 	MsmDb msmDb;
@@ -54,25 +56,26 @@ public abstract class MsmInstrument {
 	Map<String, Object> buildMsmRow(Map<String, Object> inRow, Properties props) throws MsmInstrumentException {
 
 		LOGGER.debug("Build MSM row input: {}", inRow);
+		ThreadContext.put(TC_SYMBOL, inRow.get("xSymbol").toString()); // TODO xSymbol might be null
 
 		Map<String, Object> msmRow = new HashMap<>();
 		String prop;
 		Object msmValue;
 		String columnSet = "column.";
-		int index = 1;
-
+		int index = 1;		
+		
 		// Add required values to row
 		while ((prop = props.getProperty(columnSet + index++)) != null) {
 			if (!inRow.containsKey(prop)) {
 				// TODO xType or xSymbol might be null
 				incSummary(inRow.get("xType").toString(), UpdateStatus.MISSING_REQUIRED);
-				throw new MsmInstrumentException("Missing required quote data for symbol " + inRow.get("xSymbol") + ": " + prop);
+				throw new MsmInstrumentException("Missing required quote data: " + prop);
 			}
 			Object inValue = inRow.get(prop);
 			if ((msmValue = createMsmColumnValue(prop, inValue)) == null) {
 				// TODO xType or xSymbol might be null
 				incSummary(inRow.get("xType").toString(), UpdateStatus.INVALID_REQUIRED);
-				throw new MsmInstrumentException("Invalid required quote data for symbol " + inRow.get("xSymbol") + ": " + prop + "=" + inValue);
+				throw new MsmInstrumentException("Invalid required quote data: " + prop + "=" + inValue);
 			} else {
 				msmRow.put(prop, msmValue);
 			}
@@ -107,11 +110,11 @@ public abstract class MsmInstrument {
 		for (int i = 0; i < msgPrefix.length; i++) {
 			String columns = badColumns[i].toString();
 			if (!columns.isEmpty()) {
-				LOGGER.warn("{} for symbol {}: {}", msgPrefix[i], inRow.get("xSymbol"), columns);
+				LOGGER.warn("{}: {}", msgPrefix[i], columns);
 			}
 		}
 		
-		LOGGER.debug("Build MSM row output: {}",msmRow);
+		LOGGER.debug("Build MSM row output: {}", msmRow);
 		return msmRow;
 	}
 
@@ -171,6 +174,7 @@ public abstract class MsmInstrument {
 	}
 
 	public UpdateStatus printSummary() {
+		ThreadContext.remove(TC_SYMBOL);
 		UpdateStatus finalStatus = UpdateStatus.OK;
 		int maxExitCode = UpdateStatus.OK.exitCode;
 		Set<UpdateStatus> updatedSet = EnumSet.of(UpdateStatus.OK, UpdateStatus.MISSING_OPTIONAL, UpdateStatus.INVALID_OPTIONAL, UpdateStatus.NEW_STALE);
@@ -193,7 +197,7 @@ public abstract class MsmInstrument {
 				}
 			}
 			LOGGER.info("Summary for quote type {}: updated={}/{} [{}]", entry.getKey(), updated, total, msgSj.toString());
-		}
+		}		
 		return finalStatus;
 	}
 }
